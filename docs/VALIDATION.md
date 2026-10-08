@@ -44,7 +44,10 @@ bestätigen und gewährt keinen zusätzlichen Identitätsnachweis. Auch Historie
 und Live-Ereignisse müssen beim wirklichen Provider geprüft werden, weil
 Evolution-Versionen diese Metadaten unterschiedlich weiterreichen können.
 
-Der aktuelle GitHub-CI-Lauf prüft zusätzlich eine frische Linux-Installation.
-Sein tatsächlicher Status steht im Repository unter Actions. Die Checkliste
+GitHub CI ist eingerichtet, konnte aber beim [ersten Lauf](https://github.com/marius4lui/TT/actions/runs/37825385582)
+keinen Job starten: GitHub meldet fehlgeschlagene Kontozahlungen oder ein
+erreichtes Ausgabenlimit. Deshalb ist die frische Linux-Ausführung in GitHub
+noch nicht bestätigt. Nach Klärung der Kontosperre den Workflow erneut ausführen.
+Die lokal erfolgreichen Tests sind davon getrennt zu bewerten. Die Checkliste
 in [ACCEPTANCE.md](ACCEPTANCE.md) bleibt die Grundlage für die spätere Freigabe;
 das konkrete Vorgehen steht in [OPERATIONS.md](OPERATIONS.md).
