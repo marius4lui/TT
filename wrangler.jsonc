@@ -1,17 +1,19 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "tt",
+  "account_id": "682d458a42870ea5d0561db17d2e5fee",
   "main": "apps/worker/src/index.ts",
   "compatibility_date": "2026-10-08",
   "compatibility_flags": ["nodejs_compat"],
   "workers_dev": false,
   "preview_urls": false,
+  "routes": [{ "pattern": "tt.bz3.eu", "custom_domain": true }],
   "assets": { "directory": "apps/web/public", "binding": "ASSETS", "run_worker_first": true },
   "d1_databases": [
     {
       "binding": "DB",
       "database_name": "tt",
-      "database_id": "00000000-0000-0000-0000-000000000000",
+      "database_id": "d4a78dfb-5fa4-49d5-a0ec-26a9e6cf26b9",
       "migrations_dir": "migrations",
     },
   ],

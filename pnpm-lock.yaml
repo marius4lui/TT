@@ -30,6 +30,9 @@ importers:
       '@types/node':
         specifier: ^24.0.0
         version: 24.19.1
+      jsonc-parser:
+        specifier: ^3.3.1
+        version: 3.3.1
       prettier:
         specifier: 3.8.3
         version: 3.8.3
@@ -686,6 +689,9 @@ packages:
   jsbi@4.3.2:
     resolution: {integrity: sha512-9fqMSQbhJykSeii05nxKl4m6Eqn2P6rOlYiS+C5Dr/HPIU/7yZxu5qzbs40tgaFORiw2Amd0mirjxatXYMkIew==}
 
+  jsonc-parser@3.3.1:
+    resolution: {integrity: sha512-HUgH65KyejrUFPvHFPbqOY0rsFip3Bo5wb4ngvdi1EpCYWUQDC5V+Y7mZws+DLkr4M//zQJoanu1SP+87Dv1oQ==}
+
   kleur@4.1.5:
     resolution: {integrity: sha512-o+NO+8WrRiQEE4/7nwRJhN1HWpVmJm511pBHUxPLtp0BUISzlBplORYSmTclCnJvQq2tKu/sgl3xVpkc7ZWuQQ==}
     engines: {node: '>=6'}
@@ -1325,6 +1331,8 @@ snapshots:
   hono@4.13.13: {}
 
   jsbi@4.3.2: {}
+
+  jsonc-parser@3.3.1: {}
 
   kleur@4.1.5: {}
 

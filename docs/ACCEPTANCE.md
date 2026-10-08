@@ -1,6 +1,6 @@
 # Abnahme vor Freigabe
 
-Stand: 8. Oktober 2026. Für diese Repository-Kopie sind keine produktiven Dienste oder eine echte WhatsApp-Testgruppe bestätigt. Alle Punkte unten sind offen, bis ein Ergebnis und ein knappes, datensparsames Protokoll vorliegen. `pnpm check` und Worker-Builds ersetzen keine reale WhatsApp-Abnahme.
+Stand: 8. Oktober 2026. Das Hosting auf `tt.bz3.eu` ist veröffentlicht und geprüft; die Nachweise stehen in [VALIDATION.md](VALIDATION.md). Eine echte WhatsApp-Testgruppe ist noch nicht angebunden. Die Freigabepunkte unten bleiben offen, bis ihre vollständigen Ergebnisse vorliegen. `pnpm check` und Worker-Builds ersetzen keine reale WhatsApp-Abnahme.
 
 Für jeden Test nur Datum, Testumgebung, App-/Betriebssystemversion, Ergebnis und technische Referenz festhalten. Keine vollständigen Telefonnummern, Login-Codes, API-Schlüssel, Chatverläufe oder unnötigen personenbezogenen Daten in das Protokoll aufnehmen.
 

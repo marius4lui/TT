@@ -2,7 +2,7 @@
 
 TT organisiert Tischtennistraining über WhatsApp. Der Worker verwaltet Trainingsserien, Ausnahmen, Rückmeldungen und Nachrichten; D1 hält den Zustand dauerhaft. Eine kleine öffentliche Website stellt Trainings- und Datenschutzhinweise sowie eine freiwillige WhatsApp-Anmeldung bereit. Ein Konto ist keine Voraussetzung, um am Training teilzunehmen.
 
-Das Repository enthält den v1-Code, ist aber privat und nicht produktiv eingerichtet oder veröffentlicht. Es ist noch keine neue Rufnummer oder Evolution-Instanz provisioniert; WhatsApp-Abnahmen auf Android und iOS sind offen. Die Website ist kein Trainer-Dashboard.
+Das Repository ist privat. Worker, Website, EU-D1 und Cron sind unter [tt.bz3.eu](https://tt.bz3.eu) veröffentlicht. Der Nachrichtenbetrieb bleibt pausiert; Telefonnummer, Evolution-Anbindung, Datenschutzhinweise und WhatsApp-Abnahme auf Android/iOS stehen noch aus. Die Website ist kein Trainer-Dashboard.
 
 ## Stack
 
@@ -50,4 +50,4 @@ Die Befehle und Setup-Varianten stehen in [docs/OPERATIONS.md](docs/OPERATIONS.m
 
 Die bereits ausgeführten Prüfungen und ihre Grenzen stehen in [docs/VALIDATION.md](docs/VALIDATION.md).
 
-CI führt Prüfungen aus, veröffentlicht aber nichts. Produktivbetrieb erst nach abgeschlossener D1-/Worker-Konfiguration, veröffentlichten und geprüften Datenschutzhinweisen sowie erfolgreicher Testgruppen-Abnahme freigeben. Die offenen Fälle und Nachweise stehen in [docs/ACCEPTANCE.md](docs/ACCEPTANCE.md). Es gibt derzeit keinen bestätigten Deploy oder Live-Test.
+CI führt Prüfungen aus, veröffentlicht aber nichts. Das Hosting wurde manuell veröffentlicht und über HTTPS geprüft. WhatsApp-Betrieb erst nach Evolution-Einrichtung, veröffentlichten und geprüften Datenschutzhinweisen sowie erfolgreicher Testgruppen-Abnahme freigeben. Die offenen Fälle stehen in [docs/ACCEPTANCE.md](docs/ACCEPTANCE.md).

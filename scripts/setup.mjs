@@ -1,6 +1,7 @@
 import { randomBytes, createHash } from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { writeFile, unlink, readFile } from 'node:fs/promises';
+import { parse as parseJsonc } from 'jsonc-parser';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -109,7 +110,14 @@ try {
   if (connect) {
     for (const name of ['EVOLUTION_URL', 'EVOLUTION_INSTANCE', 'EVOLUTION_API_KEY'])
       if (!process.env[name]) throw new Error(`${name} fehlt in der Prozessumgebung.`);
-    const config = JSON.parse(await readFile(resolve(root, 'wrangler.jsonc'), 'utf8'));
+    const configErrors = [];
+    const config = parseJsonc(
+      await readFile(resolve(root, 'wrangler.jsonc'), 'utf8'),
+      configErrors,
+      { allowTrailingComma: true },
+    );
+    if (configErrors.length)
+      throw new Error('Die wrangler.jsonc ist ungültig. Konfiguration prüfen.');
     if (
       config.vars?.EVOLUTION_URL !== process.env.EVOLUTION_URL ||
       config.vars?.EVOLUTION_INSTANCE !== process.env.EVOLUTION_INSTANCE

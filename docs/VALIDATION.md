@@ -2,7 +2,17 @@
 
 Geprüft am 8. Oktober 2026 unter Windows mit Node.js 24, pnpm 11.9.0,
 Vitest 5.0.3 und Wrangler 4.149.0. Es wurden keine echten WhatsApp-Nachrichten
-versandt und keine Cloudflare-Produktionsressourcen angelegt oder verändert.
+versandt. Das Hosting wurde anschließend auf ausdrücklichen Wunsch veröffentlicht.
+
+## Hosting-Abnahme
+
+- Worker `tt`, Version `06981741-8606-4bb5-be39-1832a1bf81ff`, auf `https://tt.bz3.eu` veröffentlicht; Assets und Minuten-Cron aktiv.
+- Neue D1 `tt`, ID `d4a78dfb-5fa4-49d5-a0ec-26a9e6cf26b9`, Jurisdiktion `eu`; alle vier Migrationen erfolgreich angewendet.
+- Öffentliche HTTPS-Prüfung: `/health`, Startseite, Info, Datenschutz, Login, CSS und JavaScript liefern 200.
+- Ohne Anmeldung liefert `/api/v1/me` 401; unbekannte API-Routen liefern JSON-404.
+- Loginstart und Webhook liefern vor Einrichtung 503. D1 bestätigt `enabled=0`, `privacy_ready=0` und keine Owner-Rolle.
+- Keine Evolution-Secrets oder Bootstrap-Codes produktiv gesetzt. Keine zusätzliche Testumgebung eingerichtet.
+- Das Setup-Skript liest Wrangler-Konfiguration jetzt als JSONC, einschließlich der durch Formatierung möglichen abschließenden Kommas.
 
 ## Erfolgreich lokal geprüft
 
@@ -31,7 +41,7 @@ und Änderungsnachrichten werden jeweils atomar in D1 gespeichert.
 
 Eine neue Telefonnummer und Evolution-Instanz stehen noch nicht zur Verfügung.
 Echte Provider-Payloads, Reaktionen und Kontaktkarten auf Android/iOS,
-WhatsApp-Zustellung und der produktive Betrieb von `tt.bz3.eu` sind daher offen.
+WhatsApp-Zustellung und der aktivierte Trainingsbetrieb sind daher offen.
 Es fand kein Browser-Visualtest statt. Cookie- und Loginprotokolle wurden über
 HTTP getestet; das ersetzt die spätere Geräteabnahme nicht.
 

@@ -1,10 +1,10 @@
 # Betrieb
 
-Dieses Dokument beschreibt den vorhandenen Code und die Setup-Befehle. Es bestätigt weder eine produktive Einrichtung noch eine echte WhatsApp-Abnahme. Es ist noch keine neue Rufnummer oder Evolution-Instanz provisioniert und kein Worker veröffentlicht. Vor Einsatz die Schritte aus [ACCEPTANCE.md](ACCEPTANCE.md) mit einer eigens ausgewählten Testgruppe durchführen.
+Worker, Website, EU-D1 und Minuten-Cron sind seit 8. Oktober 2026 auf `tt.bz3.eu` veröffentlicht. Nachrichtenbetrieb und Registrierung sind noch gesperrt; es gibt noch keine neue Rufnummer, Evolution-Anbindung oder Owner-Einrichtung. Vor WhatsApp-Einsatz die Schritte aus [ACCEPTANCE.md](ACCEPTANCE.md) mit einer ausgewählten Testgruppe durchführen.
 
 ## Voraussetzungen und Konfiguration
 
-TT benötigt einen Cloudflare Worker, eine gebundene D1-Datenbank, die statischen Assets aus `apps/web/public`, einen Cronlauf pro Minute und eine erreichbare Evolution-Instanz. `wrangler.jsonc` enthält derzeit eine Platzhalter-Datenbank-ID und eine Beispiel-URL. Vor einem Remote-Setup oder späterem Deploy müssen D1 angelegt und die Datenbank-ID sowie `EVOLUTION_URL` und `EVOLUTION_INSTANCE` im Wrangler-Konfigurationsziel angepasst werden. Es ist derzeit keine Produktionskonfiguration vorhanden.
+`wrangler.jsonc` enthält die veröffentlichte Worker-/Domain-Konfiguration und die tatsächliche D1-ID. Die Datenbank `tt` besteht bereits und darf für die weitere Einrichtung nicht neu angelegt werden. Nur `EVOLUTION_URL` und `EVOLUTION_INSTANCE` sind noch Platzhalter. Die drei Provider-Werte erst mit der neuen, verbundenen Instanz konfigurieren.
 
 Der Worker benötigt zur Laufzeit:
 
@@ -108,22 +108,17 @@ Die Webanmeldung startet aktiv per POST, bindet eine kurzlebige Challenge an den
 - Vor Remote-Migrationen den Zielbereich prüfen und einen geeigneten Wiederherstellungspunkt erfassen. Nach einer D1-Wiederherstellung Versand und Setup zunächst gesperrt lassen, bis gespeicherte Jobs und Codes geprüft sind.
 - Fehlerberichte ohne API-Key, Login-Code, vollständige Telefonnummer/JID und Nachrichteninhalt erstellen.
 
-## Zukünftiger Remote-Rollout
+## Anschluss der späteren Evolution-Instanz
 
-Die folgenden Schritte beschreiben einen späteren, ausdrücklich freizugebenden Rollout. In diesem Repository sind keine Cloudflare-Ressourcen erstellt, keine Rufnummer oder Evolution-Instanz provisioniert und kein Worker veröffentlicht.
+Das Hosting ist bereits abgeschlossen. Sobald die Zugangsdaten vorhanden sind:
 
-1. D1 in der vorgesehenen Cloudflare-Account-Region anlegen: `wrangler d1 create tt`. Die ausgegebene Datenbank-ID in `wrangler.jsonc` eintragen und `EVOLUTION_URL` sowie `EVOLUTION_INSTANCE` auf die bestätigte Instanz setzen.
-2. Für den produktiven Host eine Worker-Custom-Domain konfigurieren. Der entsprechende Wrangler-Block sieht so aus:
-
-   ```jsonc
-   "routes": [{ "pattern": "tt.bz3.eu", "custom_domain": true }]
-   ```
-
-3. Prüfen, dass D1-ID, Domain, Evolution-URL und Instanzname zusammengehören. Dann `pnpm db:migrate:remote` ausführen.
-4. Den zunächst pausierten Worker veröffentlichen: `pnpm deploy`.
+1. Die neue Nummer mit der Evolution-Instanz verbinden. `EVOLUTION_URL` und `EVOLUTION_INSTANCE` in `wrangler.jsonc` auf diese Instanz setzen. D1-ID und Domain beibehalten.
+2. Lokal `pnpm check` ausführen und die Konfigurationsänderung im privaten Repository speichern.
+3. Prüfen, dass D1-ID, Domain, Evolution-URL und Instanzname zusammengehören. Nur bei neuen Migrationen `pnpm db:migrate:remote` ausführen; die vier vorhandenen Migrationen sind bereits angewendet.
+4. Die neuen Provider-Einstellungen veröffentlichen: `pnpm deploy`. TT bleibt pausiert.
 5. Die drei Evolution-Werte in der Prozessumgebung bereitstellen und `pnpm run setup --remote --connect` ausführen. Das CLI setzt das Worker-Secret, registriert und überprüft den authentifizierten Webhook und erzeugt den Bootstrap-Code. Es sendet keine WhatsApp-Nachrichten.
 6. Den Bootstrap-Code ausschließlich privat mit `/einrichten CODE` an den Bot senden und den ersten Owner mit `JA` bestätigen.
 7. Owner wählt die Gruppe mit `/gruppen` und `/gruppe JID`, richtet Trainingszeiten sowie vollständige Hinweise mit `/datenschutz TEXT` ein und bestätigt die Änderungen. Vor dem Einschalten die Testgruppe informieren.
 8. Die Live-Abnahme aus [ACCEPTANCE.md](ACCEPTANCE.md) durchführen. Erst danach den Nachrichtenbetrieb mit `/aktivieren` einschalten und die Änderung bestätigen.
 
-Keinen dieser Schritte für dieses Arbeitsziel ausführen. Der normale CI-Workflow deployt nichts; die Reihenfolge ist ein späterer Runbook-Ablauf.
+Der normale CI-Workflow deployt nichts. Ein Bootstrap-Code wird erst bei dieser Einrichtung erzeugt, da er nach 30 Minuten abläuft.
