@@ -13,6 +13,7 @@ export interface Series {
   late_offset: number;
   active: number;
   created_at: number;
+  version?: number;
 }
 export interface Training {
   id: string;
@@ -80,7 +81,7 @@ export async function materialize(db: D1Database, now: number, force = false): P
       if (o.endAt <= now) continue;
       await db
         .prepare(
-          `INSERT OR IGNORE INTO training_sessions(id,series_id,group_jid,local_date,start_at,end_at,timezone,location,invite_at,late_at,created_at) SELECT ?,?,?,?,?,?,?,?,?,?,? WHERE EXISTS(SELECT 1 FROM training_series WHERE id=? AND active=1) AND NOT EXISTS(SELECT 1 FROM training_exceptions WHERE series_id=? AND from_date<=? AND to_date>=?)`,
+          `INSERT OR IGNORE INTO training_sessions(id,series_id,group_jid,local_date,start_at,end_at,timezone,location,invite_at,late_at,created_at) SELECT ?,?,?,?,?,?,?,?,?,?,? WHERE EXISTS(SELECT 1 FROM training_series WHERE id=? AND active=1 AND version=?) AND NOT EXISTS(SELECT 1 FROM training_exceptions WHERE series_id=? AND from_date<=? AND to_date>=?)`,
         )
         .bind(
           `${row.id}-${date}`,
@@ -95,6 +96,7 @@ export async function materialize(db: D1Database, now: number, force = false): P
           o.lateReminderAt,
           now,
           row.id,
+          row.version ?? 1,
           row.id,
           date,
           date,

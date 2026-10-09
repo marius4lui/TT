@@ -2,6 +2,7 @@ import { EvolutionClient, TransportError } from '@tt/whatsapp';
 import type { Env } from './types';
 import { all, setting } from './db';
 import { label, materialize, type Training } from './training';
+import { renderTrainerSummary, type SummaryRow } from './trainer-summary';
 
 export interface Job {
   id: string;
@@ -17,6 +18,7 @@ export interface Job {
   status: string;
   attempts: number;
   lease_token: string | null;
+  preference_version: number | null;
 }
 export interface QueueInput {
   key: string;
@@ -57,11 +59,11 @@ export async function queue(db: D1Database, input: QueueInput, now: number): Pro
     .run();
 }
 export function invitation(t: Training, origin: string): string {
-  return `🏓 Tischtennistraining\n${label(t)}\n\nReagiere auf diese Nachricht:\n👍 Ich komme · 👎 Ich komme nicht\n\nBitte sei pünktlich da.\nNeu dabei? ${origin}/info\nVerspätung melden: ${origin}/r/${encodeURIComponent(t.id)}\nPersönliche Erinnerungen sind freiwillig: ${origin}/login\nTermin: ${t.id}`;
+  return `🏓 *Tischtennistraining*\n${label(t)}\n\n*Bist du dabei?*\n👍 Ich komme\n👎 Ich komme nicht\nReagiere direkt auf diese Nachricht.\n\nInfos: ${origin}/info\nTeilnahme & Verspätung: ${origin}/r/${encodeURIComponent(t.id)}\nFreiwillige Erinnerungen: ${origin}/konto\n\n_Powered by KMUC_`;
 }
 export function lateNotice(t: Training, origin: string, now: number): string {
   const minutes = Math.max(0, Math.round((t.start_at - now) / 60000));
-  return `🏓 ${minutes > 0 ? `Das Training beginnt in ${minutes} Minuten.` : 'Das Training hat begonnen.'}\n${label(t)}\n\nWenn du später kommst, reagiere hier mit ⏰. Wenn du wieder pünktlich bist, entferne die Reaktion oder schreibe /pünktlich ${t.id}.\n\nPrivat melden: ${origin}/r/${encodeURIComponent(t.id)}\nInformationen: ${origin}/info`;
+  return `🏓 *${minutes > 0 ? `Training in ${minutes} ${minutes === 1 ? 'Minute' : 'Minuten'}` : 'Das Training hat begonnen'}*\n${label(t)}\n\n⏰ Du kommst später? Reagiere auf diese Nachricht.\nWieder pünktlich? Entferne deine ⏰-Reaktion.\n\nTeilnahme & Verspätung: ${origin}/r/${encodeURIComponent(t.id)}\nInfos: ${origin}/info\n\n_Powered by KMUC_`;
 }
 export async function planJobs(db: D1Database, now: number): Promise<void> {
   if ((await setting(db, 'enabled')) !== '1' || (await setting(db, 'privacy_ready')) !== '1')
@@ -168,6 +170,22 @@ async function permitted(db: D1Database, j: Job, now: number): Promise<boolean> 
     if (!session || !session.active || session.version !== j.session_version) return false;
     if (session.status === 'cancelled' && !['change', 'personal_change'].includes(j.kind))
       return false;
+    if (j.kind === 'trainer_summary') {
+      const preference = await db
+        .prepare(
+          `SELECT p.* FROM trainer_summary_preferences p JOIN roles r ON r.user_id=p.user_id WHERE p.user_id=? AND p.enabled=1 AND p.version=? AND r.role IN ('owner','admin')`,
+        )
+        .bind(j.user_id, j.preference_version)
+        .first<SummaryRow>();
+      if (!preference) return false;
+      const consent = await db
+        .prepare(
+          "SELECT accepted FROM consents WHERE user_id=? AND purpose='trainer_summary' ORDER BY created_at DESC,rowid DESC LIMIT 1",
+        )
+        .bind(j.user_id)
+        .first<{ accepted: number }>();
+      if (consent?.accepted !== 1) return false;
+    }
     if (j.kind.startsWith('personal_')) {
       const u = await db
         .prepare(
@@ -229,7 +247,42 @@ export async function sendOutbox(
       if (j.kind === 'contact') {
         const card = JSON.parse(j.text) as { name: string; phone: string };
         result = await client.sendContact(j.chat_jid, card.name, card.phone);
-      } else result = await client.sendText(j.chat_jid, j.text);
+      } else {
+        let text = j.text;
+        if (j.session_id && ['late', 'personal_late', 'trainer_summary'].includes(j.kind)) {
+          const training = await env.DB.prepare(
+            'SELECT * FROM training_sessions WHERE id=? AND version=?',
+          )
+            .bind(j.session_id, j.session_version)
+            .first<Training>();
+          if (!training) throw new TransportError('permanent');
+          if (j.kind === 'trainer_summary') {
+            const preference = await env.DB.prepare(
+              'SELECT * FROM trainer_summary_preferences WHERE user_id=? AND enabled=1 AND version=?',
+            )
+              .bind(j.user_id, j.preference_version)
+              .first<SummaryRow>();
+            if (!preference) throw new TransportError('permanent');
+            text = await renderTrainerSummary(env.DB, training, preference);
+          } else
+            text = lateNotice(training, await setting(env.DB, 'origin', 'https://tt.bz3.eu'), now);
+        }
+        // Rendering reads fresh attendance. Recheck consent/role/version after those reads too.
+        const lease = await env.DB.prepare(
+          "SELECT id FROM outbox_jobs WHERE id=? AND lease_token=? AND status='processing'",
+        )
+          .bind(j.id, token)
+          .first();
+        if (!lease || !(await permitted(env.DB, j, now))) {
+          await env.DB.prepare(
+            "UPDATE outbox_jobs SET status='cancelled' WHERE id=? AND lease_token=? AND status='processing'",
+          )
+            .bind(j.id, token)
+            .run();
+          continue;
+        }
+        result = await client.sendText(j.chat_jid, text);
+      }
       await env.DB.batch([
         env.DB.prepare(
           "UPDATE outbox_jobs SET status='sent',provider_id=?,error=NULL,text=CASE WHEN kind IN ('reply','contact') THEN '' ELSE text END WHERE id=? AND lease_token=? AND status='processing'",

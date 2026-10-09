@@ -92,3 +92,19 @@ noch nicht bestätigt. Nach Klärung der Kontosperre den Workflow erneut ausfüh
 Die lokal erfolgreichen Tests sind davon getrennt zu bewerten. Die Checkliste
 in [ACCEPTANCE.md](ACCEPTANCE.md) bleibt die Grundlage für die spätere Freigabe;
 das konkrete Vorgehen steht in [OPERATIONS.md](OPERATIONS.md).
+
+## Web-Trainerbereich und Deployment am 9. Oktober 2026
+
+Diese Prüfung ergänzt und ersetzt die früheren offenen Punkte zur lokalen Browserprüfung:
+
+- 437 Vitest-Tests, sieben Operator-Tests, Typecheck, Formatprüfung und Worker-Build erfolgreich.
+- Der lokale workerd/D1-Smoketest prüft den echten Worker mit einem HTTP-Evolution-Testprovider: einmaliger WhatsApp-Loginlink, Trainerzugang ohne Teilnehmerregistrierung, ausdrückliche Teilnehmerregistrierung und optionale Erinnerungen, Rollen- und Origin-Schutz sowie stille Gruppenreaktionen.
+- Browserprüfung mit ausdrücklicher Nutzerfreigabe: Ansichten mit 320, 390 und 1440 Pixel Breite; Anmeldung, Termin anlegen/verschieben, Rückmeldungen bearbeiten, Trainerübersicht und Gruppenfreigabe bedient. Die Gruppenfreigabe erzeugte genau einen erfolgreich an den Testprovider gesendeten Begrüßungsauftrag.
+- Astra überarbeitete mobile Navigation, Trainerübersicht und Dialoge; anschließend SVG-Schließenbuttons, kompakte Terminkarten und Footer-Abstände nach Nutzerfeedback nachgebessert. Datenschutz zusätzlich auf der produktiven Domain mobil visuell geprüft.
+- D1-Migrationen 0005–0007 erfolgreich angewendet. Vorheriger Wiederherstellungspunkt: `00000003-000002a7-000050ff-48cd52b1db382a2ab5e983cd154a4b07`.
+- Worker-Version `6f193e74-4225-4d1d-b8eb-176ca0f2090f` auf `tt.bz3.eu` veröffentlicht. Der erste Asset-Upload traf einen Cloudflare-503; der zweite Deploy war erfolgreich.
+- Bestehenden Evolution-Webhook um `GROUPS_UPSERT` ergänzt und erneut gelesen; Adresse, Authentifizierung und bestehende Ereignisse erhalten.
+- Live: Health, Trainerseite, Login, Info, Datenschutz und Favicon HTTP 200; Trainer-API ohne Anmeldung 401; fremder Origin beim Login 403. Trainer- und Loginseiten senden `Cache-Control: no-store`.
+- Produktive Automatik unverändert pausiert; Datenschutzhinweise freigegeben und genau ein Owner vorhanden. Keine zusätzliche echte WhatsApp-Testnachricht ausgelöst.
+
+Die neue Einladung und Anmeldung wurden im lokalen Browser mit Testprovider erfolgreich geprüft. Eine erneute vollständige Abnahme dieser neuen Abläufe mit realem WhatsApp auf dem Handy steht aus. GitHub-CI-Status ist getrennt von den lokal erfolgreichen Prüfungen zu bewerten.

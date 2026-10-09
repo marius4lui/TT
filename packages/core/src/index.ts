@@ -1,4 +1,5 @@
 import { Temporal } from '@js-temporal/polyfill';
+export { attendanceIntent, chatIntent, normalizeLanguage, type AttendanceIntent } from './language';
 
 export const DEFAULT_TIMEZONE = 'Europe/Berlin';
 

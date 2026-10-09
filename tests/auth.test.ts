@@ -75,7 +75,7 @@ async function owner(u: User): Promise<void> {
     .run();
 }
 async function register(u: User): Promise<void> {
-  await send(u, '/login');
+  await send(u, '/registrieren');
   await send(u, 'JA');
 }
 async function request(
@@ -122,6 +122,68 @@ describe('identity mapping', () => {
     expect(mapped?.id).toBe(a.id);
     expect((await resolveUser(env, '12345678901@lid', [], '', clock))?.id).toBe(a.id);
     expect(await resolveUser(env, '12345@g.us', [], '', clock)).toBeNull();
+  });
+  it('fills a discovered blank name on the next authenticated event without registering the user', async () => {
+    const jid = '491234567891@s.whatsapp.net';
+    const discovered = await resolveUser(env, jid, [], '', clock);
+    expect(discovered?.display_name).toBe('');
+    expect((await resolveUser(env, jid, [], '   ', clock))?.display_name).toBe('');
+    const named = await resolveUser(env, jid, ['12345678901@lid'], '  Marius  ', clock + 1);
+    expect(named).toMatchObject({
+      id: discovered!.id,
+      display_name: 'Marius',
+      registered_at: null,
+      reminders: 0,
+    });
+    expect(
+      (await resolveUser(env, '12345678901@lid', [], 'Different push name', clock + 2))
+        ?.display_name,
+    ).toBe('Marius');
+  });
+  it('preserves an existing custom name and one concurrently saved before the fill', async () => {
+    const a = await resolveUser(env, '491234567891@s.whatsapp.net', [], '', clock);
+    const batch = db.batch.bind(db);
+    db.batch = async (statements) => {
+      db.batch = batch;
+      await db
+        .prepare('UPDATE users SET display_name=? WHERE id=?')
+        .bind('Mein Profilname', a!.id)
+        .run();
+      return batch(statements);
+    };
+    expect((await resolveUser(env, a!.jid, [], 'WhatsApp Name', clock + 1))?.display_name).toBe(
+      'Mein Profilname',
+    );
+    expect((await resolveUser(env, a!.jid, [], 'Anderer Name', clock + 2))?.display_name).toBe(
+      'Mein Profilname',
+    );
+  });
+  it('rolls back name filling when an alias is concurrently claimed by another user', async () => {
+    const a = await resolveUser(env, '491234567891@s.whatsapp.net', [], '', clock),
+      b = await user('491234567892');
+    const batch = db.batch.bind(db),
+      lid = '12345678901@lid';
+    db.batch = async (statements) => {
+      db.batch = batch;
+      await db
+        .prepare('INSERT INTO identity_aliases(jid,user_id) VALUES(?,?)')
+        .bind(lid, b.id)
+        .run();
+      return batch(statements);
+    };
+    expect(await resolveUser(env, a!.jid, [lid], 'Wrong identity name', clock + 1)).toBeNull();
+    expect(
+      await db
+        .prepare('SELECT display_name FROM users WHERE id=?')
+        .bind(a!.id)
+        .first('display_name'),
+    ).toBe('');
+  });
+  it('bounds newly filled provider names to eighty characters', async () => {
+    const a = await resolveUser(env, '491234567891@s.whatsapp.net', [], '', clock);
+    expect((await resolveUser(env, a!.jid, [], 'N'.repeat(120), clock + 1))?.display_name).toBe(
+      'N'.repeat(80),
+    );
   });
   it('enforces an atomic rate limit and expiration', async () => {
     expect(await consumeRateLimit(db, 'key', 2, 1000, clock)).toBe(true);
@@ -278,9 +340,85 @@ describe('registration, reminders and privacy', () => {
       { purpose: 'reminders', accepted: 0 },
     ]);
   });
+  it('stops member reminders and trainer summaries together without stopping group training', async () => {
+    const a = await user();
+    await owner(a);
+    await db.prepare('UPDATE users SET reminders=1 WHERE id=?').bind(a.id).run();
+    await db
+      .prepare('INSERT INTO trainer_summary_preferences(user_id,enabled,updated_at) VALUES(?,1,?)')
+      .bind(a.id, clock)
+      .run();
+    await db.prepare("UPDATE settings SET value='1' WHERE key='enabled'").run();
+    for (const kind of ['personal_invite', 'trainer_summary'])
+      await db
+        .prepare(
+          "INSERT INTO outbox_jobs(id,dedupe_key,chat_jid,user_id,kind,text,due_at,expires_at,created_at,status) VALUES(?,?,?,?,?,'Reminder',?,?,?,'processing')",
+        )
+        .bind(kind, kind, a.jid, a.id, kind, clock, clock + 60000, clock)
+        .run();
+    const stop = await context(a, '/stop');
+    expect(await handleAccountMessage(stop)).toEqual([
+      'Persönliche Erinnerungen und Trainerübersichten sind ausgeschaltet.',
+    ]);
+    await handleAccountMessage(stop);
+    expect(
+      await db.prepare('SELECT registered_at,reminders FROM users WHERE id=?').bind(a.id).first(),
+    ).toEqual({ registered_at: null, reminders: 0 });
+    expect(
+      await db
+        .prepare('SELECT enabled,version FROM trainer_summary_preferences WHERE user_id=?')
+        .bind(a.id)
+        .first(),
+    ).toEqual({ enabled: 0, version: 2 });
+    expect(
+      (await db.prepare('SELECT kind,status FROM outbox_jobs ORDER BY kind').all()).results,
+    ).toEqual([
+      { kind: 'personal_invite', status: 'cancelled' },
+      { kind: 'trainer_summary', status: 'cancelled' },
+    ]);
+    expect(
+      await db
+        .prepare(
+          "SELECT COUNT(*) AS n FROM consents WHERE purpose='trainer_summary' AND accepted=0",
+        )
+        .first('n'),
+    ).toBe(1);
+    expect(await db.prepare("SELECT value FROM settings WHERE key='enabled'").first('value')).toBe(
+      '1',
+    );
+  });
+  it('rolls the entire stop back on failure and preserves a newer trainer preference', async () => {
+    const a = await user();
+    await db.prepare('UPDATE users SET reminders=1 WHERE id=?').bind(a.id).run();
+    await db
+      .prepare('INSERT INTO trainer_summary_preferences(user_id,enabled,updated_at) VALUES(?,1,?)')
+      .bind(a.id, clock)
+      .run();
+    await db.exec(
+      "CREATE TRIGGER stop_failure BEFORE UPDATE ON trainer_summary_preferences BEGIN SELECT RAISE(ABORT,'fixture failure'); END",
+    );
+    const stop = await context(a, '/stop');
+    await expect(handleAccountMessage(stop)).rejects.toThrow('fixture failure');
+    expect(
+      await db.prepare('SELECT reminders FROM users WHERE id=?').bind(a.id).first('reminders'),
+    ).toBe(1);
+    expect(await db.prepare('SELECT COUNT(*) AS n FROM auth_receipts').first('n')).toBe(0);
+    await db.exec('DROP TRIGGER stop_failure');
+    await db
+      .prepare('UPDATE trainer_summary_preferences SET updated_at=? WHERE user_id=?')
+      .bind(stop.timestamp + 1, a.id)
+      .run();
+    expect((await handleAccountMessage(stop))![0]).toContain('neuere Nachrichteneinstellung');
+    expect(
+      await db
+        .prepare('SELECT enabled FROM trainer_summary_preferences WHERE user_id=?')
+        .bind(a.id)
+        .first('enabled'),
+    ).toBe(1);
+  });
   it('requires an unexpired, newer, explicit confirmation and ignores replays', async () => {
     const a = await user();
-    const initial = await context(a, '/login');
+    const initial = await context(a, '/registrieren');
     await handleAccountMessage(initial);
     await send(a, 'JA', { timestamp: initial.timestamp });
     expect(
@@ -320,7 +458,7 @@ describe('registration, reminders and privacy', () => {
   });
   it('rolls the complete confirmation back if a concurrent command replaces its dialog', async () => {
     const a = await user();
-    await send(a, '/login');
+    await send(a, '/registrieren');
     const batch = db.batch.bind(db);
     db.batch = async (statements) => {
       db.batch = batch;
@@ -449,7 +587,7 @@ describe('browser-bound authentication', () => {
     await send(a, 'JA');
     expect((await request('/api/v1/auth/finish', 'POST', expired.cookie)).status).toBe(401);
   });
-  it('uses live roles and caps sessions newly promoted to admin at eight hours', async () => {
+  it('uses live roles and caps sessions newly promoted to admin after 24 idle hours', async () => {
     const a = await user();
     await register(a);
     const token = randomToken();
@@ -457,11 +595,13 @@ describe('browser-bound authentication', () => {
       .prepare(
         'INSERT INTO auth_sessions(token_hash,user_id,authenticated_at,expires_at) VALUES(?,?,?,?)',
       )
-      .bind(await hashToken(token), a.id, clock - 9 * 60 * 60_000, clock + 60_000)
+      .bind(await hashToken(token), a.id, clock - 25 * 60 * 60_000, clock + 60_000)
       .run();
     const req = new Request(origin, { headers: { Cookie: `__Host-tt-session=${token}` } });
     expect((await getSession(req, env, clock))?.role).toBeNull();
     await owner(a);
+    expect((await getSession(req, env, clock))?.role).toBe('owner');
+    await db.prepare('UPDATE auth_sessions SET last_seen_at=authenticated_at').run();
     expect(await getSession(req, env, clock)).toBeNull();
   });
 });

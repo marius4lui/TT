@@ -247,7 +247,7 @@ describe('participation and private/group provenance', () => {
     await react('');
     expect((await attendance())?.response).toBe('unknown');
   });
-  it('deduplicates a replayed reaction and its acknowledgment using persisted stamps and logical job IDs', async () => {
+  it('deduplicates replayed reactions without spamming the group with acknowledgments', async () => {
     const event = await react('👍');
     const row = await attendance();
     await processMessage(env, event, clock + 1000);
@@ -257,7 +257,7 @@ describe('participation and private/group provenance', () => {
         .prepare('SELECT COUNT(*) AS n FROM outbox_jobs WHERE dedupe_key=?')
         .bind(`attendance:${event.id}`)
         .first(),
-    ).toEqual({ n: 1 });
+    ).toEqual({ n: 0 });
   });
   it('keeps reconfirmation required after same or stale response replay, then clears it for a newer real response', async () => {
     const original = await send(member, '/ja training');
@@ -465,9 +465,73 @@ describe('participation and private/group provenance', () => {
   });
 });
 
+describe('natural language and quiet web handoff', () => {
+  it('issues only one private login link without a contact card or participant dialogue', async () => {
+    const event = await send(owner, 'Ich möchte mich anmelden');
+    expect(await replyFor(event)).toContain('/login#');
+    expect(await db.prepare('SELECT COUNT(*) AS n FROM outbox_jobs').first('n')).toBe(1);
+    expect(await db.prepare('SELECT COUNT(*) AS n FROM conversations').first('n')).toBe(0);
+    expect(
+      await db
+        .prepare('SELECT registered_at FROM users WHERE id=?')
+        .bind(owner.id)
+        .first('registered_at'),
+    ).toBeNull();
+  });
+  it('hands reminder consent to the web in one message without enabling it', async () => {
+    const event = await send(member, 'Erinnere mich bitte ans Training');
+    expect(await replyFor(event)).toContain('/konto');
+    expect(
+      await db.prepare('SELECT reminders FROM users WHERE id=?').bind(member.id).first('reminders'),
+    ).toBe(0);
+    expect(await db.prepare('SELECT COUNT(*) AS n FROM outbox_jobs').first('n')).toBe(1);
+  });
+  it('uses a quoted invitation and makes definite natural replies without commands', async () => {
+    await send(member, 'Bin dabei', { isGroup: true, chatJid: group, quotedId: 'invitation' });
+    expect(await attendance()).toMatchObject({ response: 'yes' });
+    await send(member, 'Ich komme nicht', {
+      isGroup: true,
+      chatJid: group,
+      quotedId: 'invitation',
+    });
+    expect(await attendance()).toMatchObject({ response: 'no' });
+  });
+  it('does not record tomorrow as today, and never binds a choice from another chat', async () => {
+    await send(member, 'Ich komme morgen');
+    expect(await attendance()).toBeNull();
+    await db
+      .prepare(
+        "INSERT INTO training_sessions(id,group_jid,local_date,start_at,end_at,timezone,location,invite_at,late_at,created_at) SELECT 'second',group_jid,local_date,start_at,end_at,timezone,location,invite_at,late_at,created_at FROM training_sessions WHERE id='training'",
+      )
+      .run();
+    const first = await send(member, 'Ich komme');
+    expect(await replyFor(first)).toContain('Nummer');
+    await send(member, '1', { isGroup: true, chatJid: group });
+    expect(await attendance()).toBeNull();
+    await send(member, '1');
+    expect(
+      await db.prepare("SELECT COUNT(*) AS n FROM attendance WHERE response='yes'").first('n'),
+    ).toBe(1);
+  });
+  it('rejects stale quoted versions and choice versions, and evaluates arrival against actual start', async () => {
+    await db.prepare("UPDATE training_sessions SET version=2 WHERE id='training'").run();
+    const stale = await send(member, 'Bin dabei', {
+      isGroup: true,
+      chatJid: group,
+      quotedId: 'invitation',
+    });
+    expect(await replyFor(stale)).toContain('geändert');
+    expect(await attendance()).toBeNull();
+    await send(member, 'Ich komme erst um 17:50');
+    expect(await attendance()).toMatchObject({ response: 'yes', punctuality: 'unknown' });
+    await send(member, 'Ich komme erst um 18:10');
+    expect(await attendance()).toMatchObject({ response: 'yes', punctuality: 'late', minutes: 10 });
+  });
+});
+
 describe('separate account registration and personal consent', () => {
   it('registers without reminders, needs separate opt-in confirmation and stops already queued personal jobs', async () => {
-    await send(member, '/login');
+    await send(member, '/registrieren');
     await send(member, 'JA');
     expect(
       await db

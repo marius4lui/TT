@@ -10,6 +10,9 @@ import { planJobs, sendOutbox } from './outbox';
 import { recordAttendance } from './bot';
 import { label, type Training } from './training';
 import { renderPage } from './pages';
+import { registerTrainerRoutes } from './trainer';
+import { registerGroupRequestRoutes } from './group-requests';
+import { planTrainerSummaries } from './trainer-summary';
 
 export const app = new Hono<AppBindings>();
 app.use(
@@ -27,7 +30,7 @@ app.use('*', async (c, next) => {
   );
   if (new URL(c.req.url).protocol === 'https:')
     c.header('Strict-Transport-Security', 'max-age=31536000');
-  if (c.req.path.startsWith('/api/') || ['/login', '/konto'].includes(c.req.path))
+  if (c.req.path.startsWith('/api/') || ['/login', '/konto', '/trainer'].includes(c.req.path))
     c.header('Cache-Control', 'no-store');
   if (c.req.path.startsWith('/api/') && !['GET', 'HEAD', 'OPTIONS'].includes(c.req.method)) {
     const allowed = await setting(c.env.DB, 'origin', 'https://tt.bz3.eu');
@@ -80,6 +83,8 @@ app.post('/webhooks/evolution', async (c) => {
   return c.json({ accepted }, 202);
 });
 registerAuthRoutes(app);
+registerGroupRequestRoutes(app);
+registerTrainerRoutes(app);
 app.get('/api/v1/sessions', async (c) => {
   const session = await getSession(c.req.raw, c.env);
   if (!session) return c.json({ error: 'unauthorized' }, 401);
@@ -168,7 +173,7 @@ app.get('/r/:id', async (c) => {
     return c.text('Der Bot wird noch eingerichtet.', 503);
   c.header('Cache-Control', 'no-store');
   return c.redirect(
-    `https://wa.me/${jid.split('@')[0]}?text=${encodeURIComponent(`/spät ${t.id}`)}`,
+    `https://wa.me/${jid.split('@')[0]}?text=${encodeURIComponent(`Ich komme später zum Training (${t.id}).`)}`,
     302,
   );
 });
@@ -203,6 +208,7 @@ app.get('*', async (c) => {
 export async function scheduled(env: Env, now = Date.now()): Promise<void> {
   await drainInbox(env, now);
   await planJobs(env.DB, now);
+  await planTrainerSummaries(env.DB, now);
   if (env.EVOLUTION_API_KEY) await sendOutbox(env, now);
   await cleanup(env.DB, now);
   await setSetting(env.DB, 'last_cron', new Date(now).toISOString());

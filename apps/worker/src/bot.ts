@@ -1,8 +1,11 @@
 import {
   normalizeEmoji,
-  parseLateIntent,
+  attendanceIntent,
+  chatIntent,
+  type AttendanceIntent,
   reduceAttendance,
   occurrence,
+  localTimestamp,
   parseDate,
   type AttendanceState,
   type AttendanceChange,
@@ -12,6 +15,7 @@ import { getRole, handleAccountMessage, resolveUser } from './auth';
 import { all, setting } from './db';
 import type { Env, BotContext, User } from './types';
 import { evolution, queue } from './outbox';
+import { requestGroupLink } from './group-requests';
 import {
   dateInZone,
   findTraining,
@@ -120,7 +124,7 @@ async function selectTraining(ctx: BotContext, reference?: string): Promise<Trai
     );
   return null;
 }
-function notifyChange(
+export function notifyChange(
   ctx: BotContext,
   t: Training,
   message: string,
@@ -145,7 +149,7 @@ function notifyChange(
     ).bind(key, message, ctx.now, expires, ctx.now, t.id, t.version),
   ];
 }
-function cancelSessions(ctx: BotContext, sessions: Training[]): D1PreparedStatement[] {
+export function cancelSessions(ctx: BotContext, sessions: Training[]): D1PreparedStatement[] {
   return sessions.flatMap((t) => [
     ctx.env.DB.prepare(
       "UPDATE training_sessions SET status='cancelled',version=version+1 WHERE id=? AND version=? AND status='scheduled'",
@@ -924,7 +928,7 @@ export async function recordAttendance(
             : after.attendance === 'yes'
               ? 'Du bist angemeldet. Bitte sei pünktlich da.'
               : 'Deine Rückmeldung wurde zurückgenommen.';
-      const body = `${text}\n${label(t)}\nInformationen: ${ctx.origin}/info\nVerspätung melden: ${ctx.origin}/r/${encodeURIComponent(t.id)}\nPersönliche Erinnerungen: ${ctx.origin}/login`;
+      const body = `${text}\n${label(t)}`;
       // changes() refers to the immediately preceding optimistic UPDATE in this
       // transaction. A lost race cannot enqueue a misleading acknowledgement.
       // Choose private delivery from live consent, not the earlier user snapshot.
@@ -1045,14 +1049,22 @@ export async function processMessage(
       change.late = true;
       change.attendance = 'yes';
     }
-    await recordAttendance(ctx, t, change);
+    // Group reactions already visibly acknowledge attendance. Do not flood the group
+    // with an additional bot message for each tap or removed reaction.
+    await recordAttendance(ctx, t, change, undefined, !event.isGroup);
     return;
   }
   if (!ctx.text.trim()) return;
+  const natural = ctx.text.trim().startsWith('/') ? 'none' : chatIntent(ctx.text);
+  if (!ctx.isGroup && natural === 'login') ctx.text = '/login';
+  if (!ctx.isGroup && natural === 'stop') ctx.text = '/stop';
   const [raw, ...args] = ctx.text.trim().split(/\s+/),
     cmd = commandName(raw);
   if (cmd === '/hilfe' || cmd === '/help') {
-    await reply(ctx, event.isGroup ? 'Schreib mir privat /hilfe für alle Funktionen.' : HELP);
+    await reply(
+      ctx,
+      `Reagiere mit 👍 oder 👎 auf die Trainingseinladung. Schreib zum Beispiel „Ich komme 10 Minuten später“. Konto und Einstellungen: ${ctx.origin}/login`,
+    );
     return;
   }
   if (!event.isGroup && cmd === '/abbrechen') {
@@ -1063,25 +1075,96 @@ export async function processMessage(
   // Account commands have their own roles and replay protection.
   const account = await handleAccountMessage(ctx);
   if (account !== null) {
-    if (cmd === '/login' && !ctx.isGroup) {
-      const jid = await setting(env.DB, 'bot_jid');
-      const phone = jid.endsWith('@s.whatsapp.net') ? jid.split('@')[0] : '';
-      if (/^\d{6,15}$/.test(phone))
-        await queue(
-          env.DB,
-          {
-            key: `card:${event.id}`,
-            chat: event.chatJid,
-            kind: 'contact',
-            text: JSON.stringify({ name: await setting(env.DB, 'bot_name', 'Marius Bot'), phone }),
-          },
-          now,
-        );
-    }
     for (let i = 0; i < account.length; i++) await reply(ctx, account[i], i);
     return;
   }
   const c = await conversation(ctx);
+  if (!ctx.isGroup && /https:\/\/chat\.whatsapp\.com\//i.test(ctx.text)) {
+    const links = ctx.text.match(/https:\/\/chat\.whatsapp\.com\/[^\s<>]+/gi) ?? [];
+    if (links.length !== 1) {
+      await reply(ctx, 'Bitte sende einen einzelnen WhatsApp-Gruppenlink.');
+      return;
+    }
+    try {
+      await requestGroupLink(env, user.id, links[0].replace(/[.,!]+$/, ''), now);
+      await reply(
+        ctx,
+        `Die Gruppe wartet auf die ausdrückliche Freigabe im Trainerbereich: ${ctx.origin}/trainer`,
+      );
+    } catch {
+      await reply(
+        ctx,
+        'Den Gruppenlink konnte ich gerade nicht vormerken. Prüfe den Link und versuche es später erneut.',
+      );
+    }
+    return;
+  }
+  if (!ctx.isGroup && ['reminders', 'account', 'privacy', 'help', 'manage'].includes(natural)) {
+    const role = await getRole(env.DB, user.id);
+    const message =
+      natural === 'privacy'
+        ? `Datenschutz: ${ctx.origin}/datenschutz`
+        : natural === 'help'
+          ? `Reagiere auf die Trainingseinladung oder schreib „Ich komme 10 Minuten später“. ${role ? 'Training verwalten' : 'Konto und Erinnerungen'}: ${ctx.origin}/${role ? 'trainer' : 'konto'}`
+          : `${role ? 'Termine, Gruppen und Benachrichtigungen verwaltest du im Trainerbereich' : 'Konto, persönliche Erinnerungen und deine Daten verwaltest du hier'}: ${ctx.origin}/${role ? 'trainer' : 'konto'}`;
+    await reply(ctx, message);
+    return;
+  }
+  if (!ctx.isGroup && natural === 'schedule') ctx.text = '/termine';
+  if (c?.kind === 'language:choice' && /^\d{1,2}[.!]?$/.test(ctx.text.trim())) {
+    const data = JSON.parse(c.data) as {
+      ids: string[];
+      versions: number[];
+      chatJid: string;
+      intent: AttendanceIntent;
+      timestamp: number;
+    };
+    if (data.chatJid !== ctx.chatJid) return;
+    if (ctx.timestamp <= data.timestamp) return;
+    const selected = data.ids[Number(ctx.text.trim().replace(/[.!]/g, '')) - 1];
+    if (!selected) {
+      await reply(ctx, 'Bitte wähle eine Nummer aus der letzten Terminliste.');
+      return;
+    }
+    const t = await env.DB.prepare('SELECT * FROM training_sessions WHERE id=?')
+      .bind(selected)
+      .first<Training>();
+    if (t && t.version !== data.versions[data.ids.indexOf(selected)]) {
+      await reply(
+        ctx,
+        'Der Termin wurde inzwischen geändert. Bitte sende deine Rückmeldung erneut.',
+      );
+      return;
+    }
+    if (t)
+      await recordAttendance(
+        ctx,
+        t,
+        {
+          id: event.id,
+          timestamp: event.timestamp,
+          source: 'private',
+          attendance:
+            data.intent.kind === 'no'
+              ? 'no'
+              : ['yes', 'late'].includes(data.intent.kind)
+                ? 'yes'
+                : undefined,
+          late:
+            data.intent.kind === 'late'
+              ? true
+              : data.intent.kind === 'punctual'
+                ? false
+                : undefined,
+          minutes: data.intent.minutes,
+        },
+        data.intent.arrivalTime,
+      );
+    await env.DB.prepare("DELETE FROM conversations WHERE user_id=? AND kind='language:choice'")
+      .bind(user.id)
+      .run();
+    return;
+  }
   if (
     !ctx.isGroup &&
     cmd === '/bestatigen' &&
@@ -1122,7 +1205,7 @@ export async function processMessage(
       throw error;
     }
   }
-  if (cmd === '/termine') {
+  if (cmd === '/termine' || (!ctx.isGroup && natural === 'schedule')) {
     const memberGroups = await all<{ group_jid: string }>(
       env.DB,
       'SELECT group_jid FROM memberships WHERE user_id=? AND active=1',
@@ -1168,14 +1251,46 @@ export async function processMessage(
     if (!event.isGroup)
       await reply(
         ctx,
-        'Den Befehl kenne ich nicht oder dir fehlt die Berechtigung. /hilfe zeigt die Funktionen.',
+        `Das konnte ich nicht zuordnen oder dir fehlt die Berechtigung. Konto und Einstellungen: ${ctx.origin}/login`,
       );
     return;
   }
-  const intent = parseLateIntent(ctx.text);
+  const intent = attendanceIntent(ctx.text);
   if (intent.kind === 'none') return;
+  if (event.quotedId && !intent.reference) {
+    const quoted = await env.DB.prepare(
+      'SELECT m.session_id,m.session_version,s.version,m.user_id FROM messages m JOIN training_sessions s ON s.id=m.session_id WHERE m.id=? AND m.chat_jid=?',
+    )
+      .bind(event.quotedId, ctx.chatJid)
+      .first<{
+        session_id: string;
+        session_version: number;
+        version: number;
+        user_id: string | null;
+      }>();
+    if (quoted && (!quoted.user_id || quoted.user_id === user.id)) {
+      if (quoted.version !== quoted.session_version) {
+        await reply(
+          ctx,
+          'Dieser Termin wurde geändert. Bitte antworte auf die aktuelle Einladung.',
+        );
+        return;
+      }
+      intent.reference = quoted.session_id;
+    }
+  }
   const possible = (await upcoming(env.DB, now, event.isGroup ? event.chatJid : undefined)).filter(
-    (t) => t.status === 'scheduled' && t.start_at - 6 * 3600000 <= now && t.end_at > now,
+    (t) =>
+      t.status === 'scheduled' &&
+      t.end_at > now &&
+      (intent.reference
+        ? t.id === intent.reference
+        : intent.day
+          ? dateInZone(t.start_at, t.timezone) ===
+            parseDate(dateInZone(now, t.timezone))
+              .add({ days: intent.day === 'tomorrow' ? 1 : 0 })
+              .toString()
+          : t.start_at - 36 * 3600000 <= now),
   );
   const mine = [] as Training[];
   for (const t of possible)
@@ -1187,19 +1302,50 @@ export async function processMessage(
         .first()
     )
       mine.push(t);
-  if (mine.length !== 1 || intent.kind === 'uncertain') {
+  if (intent.kind === 'uncertain') {
     await reply(
       ctx,
-      `Meinst du, dass du zum Training später kommst? Bitte bestätige mit /spät TERMIN oder /spät TERMIN MINUTEN.${
-        mine.length
-          ? `\n${mine
-              .slice(0, 4)
-              .map((t) => `${t.id} · ${label(t)}`)
-              .join('\n')}`
-          : ' Mit /termine findest du die Termin-ID.'
-      }`,
+      'Bitte bestätige kurz, was du meinst: „Ich komme“, „Ich komme nicht“ oder „Ich komme später“. Noch wurde nichts geändert.',
     );
     return;
+  }
+  if (mine.length !== 1) {
+    if (!mine.length)
+      await reply(
+        ctx,
+        'Dazu finde ich kein passendes Training. Schreib „Wann ist Training?“ oder frag deinen Trainer.',
+      );
+    else {
+      await saveConversation(ctx, 'language:choice', {
+        ids: mine.slice(0, 6).map((t) => t.id),
+        versions: mine.slice(0, 6).map((t) => t.version),
+        chatJid: ctx.chatJid,
+        intent,
+        timestamp: ctx.timestamp,
+      });
+      await reply(
+        ctx,
+        `Welches Training meinst du? Antworte mit der Nummer.\n${mine
+          .slice(0, 6)
+          .map((t, i) => `${i + 1}. ${label(t)}`)
+          .join('\n')}`,
+      );
+    }
+    return;
+  }
+  if (intent.arrivalTime) {
+    const arrival = localTimestamp(
+      dateInZone(mine[0].start_at, mine[0].timezone),
+      intent.arrivalTime,
+      mine[0].timezone,
+    );
+    if (arrival <= mine[0].start_at) {
+      intent.kind = 'yes';
+      intent.arrivalTime = undefined;
+    } else {
+      const minutes = Math.ceil((arrival - mine[0].start_at) / 60000);
+      if (minutes <= 240) intent.minutes = minutes;
+    }
   }
   await recordAttendance(
     ctx,
@@ -1208,7 +1354,8 @@ export async function processMessage(
       id: event.id,
       timestamp: event.timestamp,
       source: 'private',
-      attendance: intent.kind === 'absent' ? 'no' : intent.kind === 'late' ? 'yes' : undefined,
+      attendance:
+        intent.kind === 'no' ? 'no' : ['yes', 'late'].includes(intent.kind) ? 'yes' : undefined,
       late: intent.kind === 'late' ? true : intent.kind === 'punctual' ? false : undefined,
       minutes: intent.minutes,
     },

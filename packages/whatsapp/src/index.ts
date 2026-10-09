@@ -143,7 +143,18 @@ export function normalizeWebhook(
     if (!message || message.protocolMessage || message.editedMessage) continue;
     const reaction = object(message.reactionMessage);
     const extended = object(message.extendedTextMessage);
-    const text = string(message.conversation) ?? string(extended?.text);
+    const nativeInvite = object(message.groupInviteMessage);
+    const inviteCode = string(nativeInvite?.inviteCode);
+    const inviteExpiry = timestampMs(nativeInvite?.inviteExpiration);
+    const text =
+      string(message.conversation) ??
+      string(extended?.text) ??
+      (!isGroup &&
+      inviteCode &&
+      /^[a-zA-Z0-9_-]{20,64}$/.test(inviteCode) &&
+      (!inviteExpiry || inviteExpiry > now)
+        ? `https://chat.whatsapp.com/${inviteCode}`
+        : undefined);
     const result: MessageEvent = {
       id,
       chatJid: isGroup ? chatJid : identity.senderJid,
@@ -188,6 +199,15 @@ const connection = (value: unknown): ConnectionState =>
 export function normalizeControlWebhook(payload: unknown, instance: string): ControlEvent[] {
   const envelope = object(payload);
   if (!envelope || envelope.instance !== instance) return [];
+  if (eventName(envelope.event) === 'GROUPS_UPSERT' && Array.isArray(envelope.data)) {
+    // Discovery only: Worker verifies current bot membership and requires web approval.
+    return envelope.data.slice(0, 100).flatMap((raw) => {
+      const chatJid = normalizeJid(object(raw)?.id);
+      return chatJid?.endsWith('@g.us')
+        ? [{ kind: 'membership' as const, chatJid, action: 'add' as const, participants: [] }]
+        : [];
+    });
+  }
   const data = object(envelope.data);
   if (!data) return [];
   if (eventName(envelope.event) === 'CONNECTION_UPDATE')
@@ -380,6 +400,36 @@ export class EvolutionClient {
 
   async webhookConfig(): Promise<JsonObject> {
     return object(await this.request(`/webhook/find/${this.instance}`)) ?? {};
+  }
+
+  async inviteInfo(code: string): Promise<{ id: string; subject: string }> {
+    if (!/^[a-zA-Z0-9_-]{20,64}$/.test(code)) throw new TransportError('permanent');
+    const result = object(
+      await this.request(
+        `/group/inviteInfo/${this.instance}?inviteCode=${encodeURIComponent(code)}`,
+      ),
+    );
+    const id = normalizeJid(result?.id);
+    if (!id?.endsWith('@g.us')) throw new TransportError('permanent');
+    return { id, subject: (string(result?.subject) ?? 'WhatsApp-Gruppe').slice(0, 200) };
+  }
+
+  async acceptInvite(code: string): Promise<string> {
+    if (!/^[a-zA-Z0-9_-]{20,64}$/.test(code)) throw new TransportError('permanent');
+    // Evolution exposes this mutation as GET. Never retry after an uncertain result.
+    try {
+      const result = object(
+        await this.request(
+          `/group/acceptInviteCode/${this.instance}?inviteCode=${encodeURIComponent(code)}`,
+        ),
+      );
+      const jid = normalizeJid(result?.groupJid);
+      if (result?.accepted !== true || !jid?.endsWith('@g.us'))
+        throw new TransportError('ambiguous');
+      return jid;
+    } catch {
+      throw new TransportError('ambiguous');
+    }
   }
 
   async settings(): Promise<JsonObject> {

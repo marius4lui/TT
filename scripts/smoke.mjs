@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process';
 import { randomBytes, randomUUID, createHash } from 'node:crypto';
-import { mkdir, writeFile, unlink } from 'node:fs/promises';
+import { mkdir, writeFile, unlink, access } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import { createServer as createPortServer } from 'node:net';
 import { join, resolve } from 'node:path';
@@ -19,6 +19,9 @@ const ownerJid = '491701000001@s.whatsapp.net',
   memberJid = '491701000002@s.whatsapp.net';
 const botJid = '491701000003@s.whatsapp.net',
   groupJid = '120363100000@g.us';
+const invitedGroup = '120363100001@g.us',
+  inviteCode = 'LocalSmokeInvitationCode';
+let inviteAccepted = false;
 const webhookToken = randomBytes(32).toString('hex'),
   setupCode = randomBytes(24).toString('hex');
 const hash = (value) => createHash('sha256').update(value).digest('hex');
@@ -218,8 +221,26 @@ try {
                 { id: botJid, admin: 'admin' },
               ],
             },
+            ...(inviteAccepted
+              ? [
+                  {
+                    id: invitedGroup,
+                    subject: 'TT Einladungstest',
+                    participants: [
+                      { id: ownerJid, admin: 'admin' },
+                      { id: botJid },
+                      { id: memberJid },
+                    ],
+                  },
+                ]
+              : []),
           ]),
         );
+      } else if (request.url === `/group/inviteInfo/${instance}?inviteCode=${inviteCode}`) {
+        response.end(JSON.stringify({ id: invitedGroup, subject: 'TT Einladungstest' }));
+      } else if (request.url === `/group/acceptInviteCode/${instance}?inviteCode=${inviteCode}`) {
+        inviteAccepted = true;
+        response.end(JSON.stringify({ accepted: true, groupJid: invitedGroup }));
       } else if (request.url === `/instance/connectionState/${instance}`)
         response.end(JSON.stringify({ instance: { state: 'open' } }));
       else {
@@ -349,38 +370,35 @@ INSERT INTO bootstrap(id,state,code_hash,expires_at) VALUES(1,'pending',${quote(
     inviteOffset,
     (message) => message.number === groupJid && message.text?.includes('👍 Ich komme'),
   );
-  const reactionOffset = sent.length;
   await webhook(memberJid, '', {
     group: true,
     reaction: { key: { id: invitation.id, remoteJid: groupJid, fromMe: true }, text: '👍🏽' },
   });
-  await waitSent(
-    reactionOffset,
-    (message) => message.number === groupJid && message.text?.includes('angemeldet'),
-  );
-  progress('actual local cron invocation and persisted reaction attendance verified');
+  progress('actual local cron invocation and group reaction accepted without chat spam');
 
-  stage = 'browser-bound login, registration and optional reminders';
-  const start = await local('/api/v1/auth/start', { method: 'POST', headers: { Origin: origin } });
-  check(start.status === 200, 'login_start_failed');
-  const browserCookie = cookie(start),
-    challenge = await start.json();
+  stage = 'one-message magic login, web registration and optional reminders';
+  const api = (path, method, data, session = '') =>
+    local(path, {
+      method,
+      headers: {
+        Origin: origin,
+        'Content-Type': 'application/json',
+        ...(session ? { Cookie: session } : {}),
+      },
+      ...(data === undefined ? {} : { body: JSON.stringify(data) }),
+    });
+  const loginOffset = sent.length;
+  const loginReply = await command(memberJid, 'Ich möchte mich anmelden', '/login#');
+  const token = loginReply.text.match(/\/login#([a-f0-9]{48})/)?.[1];
+  check(!!token, 'magic_token_missing');
+  const preview = await api('/api/v1/auth/magic/preview', 'POST', { token });
   check(
-    typeof challenge.code === 'string' && browserCookie.includes('__Host-tt-browser='),
-    'browser_cookie_missing',
+    preview.status === 200 && (await preview.json()).registrationRequired === true,
+    'magic_preview_failed',
   );
-  const wrongBrowser = await local('/api/v1/auth/finish', {
-    method: 'POST',
-    headers: { Origin: origin, Cookie: `__Host-tt-browser=${randomBytes(32).toString('hex')}` },
-  });
-  check(wrongBrowser.status === 401, 'browser_binding_not_enforced');
-  await command(memberJid, `/login ${challenge.code}`, 'JA bestätigt');
-  await command(memberJid, 'JA', 'freiwilliges TT-Konto');
-  await command(memberJid, 'JA', 'Konto ist angelegt');
-  const finish = await local('/api/v1/auth/finish', {
-    method: 'POST',
-    headers: { Origin: origin, Cookie: browserCookie },
-  });
+  const missingConsent = await api('/api/v1/auth/magic/finish', 'POST', { token });
+  check(missingConsent.status === 409, 'registration_consent_missing');
+  const finish = await api('/api/v1/auth/magic/finish', 'POST', { token, consent: true });
   check(finish.status === 200, 'login_finish_failed');
   const sessionCookie = cookie(finish)
     .split('; ')
@@ -395,15 +413,60 @@ INSERT INTO bootstrap(id,state,code_hash,expires_at) VALUES(1,'pending',${quote(
     beforeConsent.status === 200 && (await beforeConsent.json()).user.reminders === false,
     'registration_implied_reminders',
   );
-  await command(memberJid, '/start', 'persönliche WhatsApp-Erinnerungen');
-  await command(memberJid, 'JA', 'sind aktiviert');
+  const preference = await api(
+    '/api/v1/account/preferences',
+    'PATCH',
+    { reminders: true, reminderConsent: true },
+    sessionCookie,
+  );
+  check(preference.status === 200, 'web_reminder_consent_failed');
   const me = await local('/api/v1/me', { headers: { Cookie: sessionCookie } });
   check(me.status === 200 && (await me.json()).user.reminders === true, 'separate_consent_failed');
-  const replay = await local('/api/v1/auth/finish', {
-    method: 'POST',
-    headers: { Origin: origin, Cookie: browserCookie },
-  });
+  const replay = await api('/api/v1/auth/magic/finish', 'POST', { token, consent: true });
   check(replay.status === 401, 'login_replay_not_rejected');
+  check(
+    sent.slice(loginOffset).filter((message) => message.number === memberJid).length === 1,
+    'login_or_consent_spam',
+  );
+  const trainerLink = await command(ownerJid, '/login', '/login#');
+  const trainerToken = trainerLink.text.match(/\/login#([a-f0-9]{48})/)?.[1];
+  const trainerFinish = await api('/api/v1/auth/magic/finish', 'POST', { token: trainerToken });
+  check(
+    trainerFinish.status === 200 && (await trainerFinish.json()).redirect === '/trainer',
+    'trainer_login_failed',
+  );
+  const trainerCookie = cookie(trainerFinish);
+  const trainerMe = await local('/api/v1/me', { headers: { Cookie: trainerCookie } });
+  const trainerIdentity = await trainerMe.json();
+  check(
+    trainerIdentity.role === 'owner' &&
+      trainerIdentity.user.registeredAt === null &&
+      trainerIdentity.registrationRequired === false,
+    'trainer_participant_registration_leaked',
+  );
+  const overview = await local('/api/v1/trainer/overview', { headers: { Cookie: trainerCookie } });
+  check(
+    overview.status === 200 && (await overview.json()).sessions.length === 1,
+    'trainer_overview_failed',
+  );
+  const summaryPreference = await api(
+    '/api/v1/trainer/summary-preference',
+    'PUT',
+    {
+      enabled: true,
+      offsetMinutes: 10,
+      includeAbsent: true,
+      includeLate: true,
+      includeCounts: true,
+      version: 0,
+    },
+    trainerCookie,
+  );
+  check(summaryPreference.status === 200, 'trainer_summary_without_participant_failed');
+  const forbiddenTrainer = await local('/api/v1/trainer/overview', {
+    headers: { Cookie: sessionCookie },
+  });
+  check(forbiddenTrainer.status === 403, 'trainer_role_not_enforced');
   const unauthorized = await local('/webhooks/evolution', {
     method: 'POST',
     headers: { Authorization: 'Bearer intentionally-wrong', 'Content-Type': 'application/json' },
@@ -411,7 +474,7 @@ INSERT INTO bootstrap(id,state,code_hash,expires_at) VALUES(1,'pending',${quote(
   });
   check(unauthorized.status === 401, 'webhook_auth_not_enforced');
   progress(
-    'WhatsApp confirmations, browser binding, separate consent and replay rejection verified',
+    'single-message login, web consent, direct trainer access and replay rejection verified',
   );
 
   stage = 'final durable state';
@@ -421,7 +484,7 @@ SELECT COUNT(*) AS n FROM training_sessions WHERE status='scheduled' AND version
 SELECT response,punctuality FROM attendance a JOIN users u ON u.id=a.user_id WHERE u.jid=${quote(memberJid)};
 SELECT registered_at,reminders FROM users WHERE jid=${quote(memberJid)};
 SELECT purpose,accepted FROM consents ORDER BY created_at;
-SELECT state,LENGTH(code_hash) AS digest_length FROM auth_challenges;
+SELECT state,LENGTH(token_hash) AS digest_length FROM auth_magic_links;
 SELECT COUNT(*) AS n FROM auth_sessions WHERE LENGTH(token_hash)=64;
 SELECT COUNT(*) AS n FROM inbox_events WHERE status!='done' OR payload!='';
 SELECT COUNT(*) AS n FROM outbox_jobs WHERE status IN ('failed','uncertain','processing');
@@ -442,7 +505,9 @@ SELECT COUNT(*) AS n FROM messages WHERE kind='invite' AND chat_jid=${quote(grou
     'consent_records_failed',
   );
   check(
-    rows[6]?.[0]?.state === 'used' && rows[6][0].digest_length === 64 && rows[7]?.[0]?.n === 1,
+    rows[6]?.length === 2 &&
+      rows[6].every((row) => row.state === 'used' && row.digest_length === 64) &&
+      rows[7]?.[0]?.n === 2,
     'auth_durable_state_failed',
   );
   check(
@@ -450,10 +515,33 @@ SELECT COUNT(*) AS n FROM messages WHERE kind='invite' AND chat_jid=${quote(grou
     'inbox_or_outbox_state_failed',
   );
   check(
-    sent.some((message) => message.path === `/message/sendContact/${instance}`),
-    'contact_transport_not_exercised',
+    !sent.some((message) => message.path === `/message/sendContact/${instance}`),
+    'unexpected_contact_card_spam',
   );
   progress('PASS — local Worker, D1, cron, Evolution mock, reactions and authentication');
+  if (process.argv.includes('--browser')) {
+    // Hold the exact tested Worker/D1 for authorized browser acceptance; no UI mocks
+    // or authentication bypass. The URL came through the same WhatsApp transport.
+    const reply = await command(ownerJid, '/login', '/login#');
+    const url = reply.text.match(/https?:\/\/\S+\/login#[a-f0-9]{48}/)?.[0];
+    check(!!url, 'browser_login_missing');
+    await writeFile(
+      join(folder, 'browser-login.json'),
+      JSON.stringify({ url, origin, stopFile: join(folder, 'browser-stop') }),
+    );
+    progress(`browser acceptance ready: ${join(folder, 'browser-login.json')}`);
+    const until = Date.now() + 30 * 60000;
+    while (Date.now() < until) {
+      if (
+        await access(join(folder, 'browser-stop')).then(
+          () => true,
+          () => false,
+        )
+      )
+        break;
+      await pause(1000);
+    }
+  }
 } catch (error) {
   failed = true;
   // Print only our fixed stage label. Never print captured Wrangler output, HTTP bodies, codes or cookies.

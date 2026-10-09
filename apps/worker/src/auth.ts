@@ -2,6 +2,7 @@ import type { Hono } from 'hono';
 import type { AppBindings, BotContext, Env, User } from './types';
 import { all, setting } from './db';
 import { consumeRateLimit, hashToken, randomToken } from './security';
+import { issueMagicLogin, registerMagicAndAccountRoutes } from './magic-login';
 
 type Role = 'owner' | 'admin' | null;
 type Conversation = { kind: string; data: string; expires_at: number };
@@ -9,7 +10,7 @@ type DialogData = { id?: string; eventId: string; timestamp: number; challengeId
 type Challenge = { id: string; state: string; user_id: string | null; expires_at: number };
 const FIVE_MINUTES = 5 * 60_000;
 const BROWSER_COOKIE = '__Host-tt-browser';
-const SESSION_COOKIE = '__Host-tt-session';
+export const SESSION_COOKIE = '__Host-tt-session';
 const tokenPattern = /^[a-f0-9]{32,128}$/;
 const REPLAY_REPLY =
   'Deine Anfrage wurde bereits verarbeitet. Mit /konto kannst du deinen aktuellen Kontostatus prüfen.';
@@ -56,16 +57,17 @@ export async function resolveUser(
     );
   const found = await lookup();
   if (found.length > 1) return null;
+  const incomingName = displayName.trim().slice(0, 80);
   const user = found[0] ?? {
     id: crypto.randomUUID(),
     jid: senderJid,
-    display_name: displayName.slice(0, 80),
+    display_name: incomingName,
     registered_at: null,
     reminders: 0,
     created_at: now,
   };
   try {
-    await env.DB.batch([
+    const results = await env.DB.batch<User>([
       ...(!found.length
         ? [
             env.DB.prepare(
@@ -79,8 +81,19 @@ export async function resolveUser(
         ON CONFLICT(jid) DO UPDATE SET user_id=CASE WHEN identity_aliases.user_id=excluded.user_id THEN identity_aliases.user_id ELSE NULL END`,
         ).bind(jid, user.id),
       ),
+      // Participant discovery may create an unnamed identity. Fill it only after
+      // the alias guards succeed; a concurrently saved profile name wins.
+      ...(incomingName
+        ? [
+            env.DB.prepare("UPDATE users SET display_name=? WHERE id=? AND display_name=''").bind(
+              incomingName,
+              user.id,
+            ),
+          ]
+        : []),
+      env.DB.prepare('SELECT * FROM users WHERE id=?').bind(user.id),
     ]);
-    return user;
+    return results[results.length - 1].results[0] ?? null;
   } catch {
     // A concurrent identity creation may have won. Never merge two existing users.
     const current = await lookup();
@@ -95,7 +108,7 @@ export async function resolveUser(
   }
 }
 
-function cookie(request: Request, name: string): string | null {
+export function cookie(request: Request, name: string): string | null {
   const values = (request.headers.get('Cookie') ?? '')
     .split(';')
     .map((v) => v.trim())
@@ -105,7 +118,7 @@ function cookie(request: Request, name: string): string | null {
   return tokenPattern.test(value) ? value : null;
 }
 
-function cookieHeader(name: string, value: string, maxAge: number): string {
+export function cookieHeader(name: string, value: string, maxAge: number): string {
   return `${name}=${value}; Path=/; Secure; HttpOnly; SameSite=Strict; Max-Age=${maxAge}`;
 }
 
@@ -117,15 +130,26 @@ export async function getSession(
   const token = cookie(request, SESSION_COOKIE);
   if (!token) return null;
   const row = await env.DB.prepare(
-    `SELECT u.*,s.authenticated_at FROM auth_sessions s JOIN users u ON u.id=s.user_id
-    WHERE s.token_hash=? AND s.expires_at>? AND u.registered_at IS NOT NULL`,
+    `SELECT u.*,s.authenticated_at,s.last_seen_at FROM auth_sessions s JOIN users u ON u.id=s.user_id
+    WHERE s.token_hash=? AND s.expires_at>? AND (u.registered_at IS NOT NULL OR EXISTS(SELECT 1 FROM roles WHERE user_id=u.id))`,
   )
     .bind(await hashToken(token), now)
-    .first<User & { authenticated_at: number }>();
+    .first<User & { authenticated_at: number; last_seen_at: number }>();
   if (!row) return null;
   const role = await getRole(env.DB, row.id);
-  if (role && now - row.authenticated_at >= 8 * 60 * 60_000) return null;
-  const { authenticated_at, ...user } = row;
+  if (
+    now - row.authenticated_at >= 7 * 86400000 ||
+    (role && now - (row.last_seen_at || row.authenticated_at) >= 86400000)
+  )
+    return null;
+  // Seven-day absolute lifetime; trainer sessions also expire after 24 hours idle.
+  // Refresh only the idle clock. Neither role reads nor browser activity extend the hard deadline.
+  await env.DB.prepare(
+    'UPDATE auth_sessions SET last_seen_at=? WHERE token_hash=? AND expires_at>?',
+  )
+    .bind(now, await hashToken(token), now)
+    .run();
+  const { authenticated_at, last_seen_at: _lastSeenAt, ...user } = row;
   return { user, role, authenticatedAt: authenticated_at };
 }
 
@@ -207,7 +231,7 @@ export function registerAuthRoutes(app: Hono<AppBindings>): void {
       ).bind(sessionHash, browserHash, now),
       c.env.DB.prepare(
         `INSERT INTO auth_sessions(token_hash,user_id,authenticated_at,expires_at)
-        SELECT exchange_hash,user_id,confirmed_at,? + CASE WHEN EXISTS(SELECT 1 FROM roles WHERE roles.user_id=auth_challenges.user_id) THEN 28800000 ELSE 604800000 END
+        SELECT exchange_hash,user_id,confirmed_at,? + 604800000
         FROM auth_challenges WHERE browser_hash=? AND exchange_hash=? AND state='used'`,
       ).bind(now, browserHash, sessionHash),
     ];
@@ -246,8 +270,10 @@ export function registerAuthRoutes(app: Hono<AppBindings>): void {
       },
       role,
       authenticatedAt,
+      registrationRequired: user.registered_at === null && !role,
     });
   });
+  registerMagicAndAccountRoutes(app);
 }
 
 async function dialog(
@@ -381,9 +407,7 @@ async function confirmDialog(
       auditStatement(ctx, 'bootstrap.confirmed'),
     ]);
     return (await getRole(db, ctx.user.id)) === 'owner'
-      ? [
-          'Du bist jetzt der erste Owner. /hilfe zeigt dir die nächsten Schritte. Ein freiwilliges Webkonto und Erinnerungen kannst du später mit /login einrichten.',
-        ]
+      ? ['Du bist jetzt der erste Owner. Schreib „anmelden“, um deinen Trainerbereich zu öffnen.']
       : ['Die Einrichtung konnte nicht bestätigt werden. Bitte wende dich an den Betreiber.'];
   }
   if (conversation.kind === 'auth:login') {
@@ -575,17 +599,21 @@ export async function handleAccountMessage(ctx: BotContext): Promise<string[] | 
   const text = ctx.text.trim(),
     parts = text.split(/\s+/),
     command = parts[0].toLocaleLowerCase('de-DE');
-  const accountCommand = [
-    '/einrichten',
-    '/admin',
-    '/login',
-    '/start',
-    '/stop',
-    '/konto',
-    '/daten',
-    '/löschen',
-    '/loeschen',
-  ].includes(command);
+  const naturalLogin =
+    /^(anmelden|login|trainerbereich (öffnen|oeffnen)|konto (öffnen|oeffnen))$/i.test(text);
+  const accountCommand =
+    [
+      '/einrichten',
+      '/admin',
+      '/login',
+      '/start',
+      '/stop',
+      '/konto',
+      '/daten',
+      '/löschen',
+      '/loeschen',
+      '/registrieren',
+    ].includes(command) || naturalLogin;
   if (ctx.isGroup)
     return accountCommand
       ? [
@@ -601,10 +629,16 @@ export async function handleAccountMessage(ctx: BotContext): Promise<string[] | 
     )
     .bind(ctx.user.id)
     .first<Conversation>();
-  if (conversation && !text.startsWith('/')) return confirmDialog(ctx, conversation);
+  if (conversation && !text.startsWith('/') && !naturalLogin)
+    return confirmDialog(ctx, conversation);
   if (!accountCommand) return null;
   if (!(await consumeRateLimit(db, `account:${ctx.user.id}`, 30, 60_000, ctx.now)))
     return ['Bitte warte eine Minute, bevor du weitere Kontobefehle sendest.'];
+  if (naturalLogin || (command === '/login' && !parts[1])) return issueMagicLogin(ctx);
+  if (command === '/registrieren')
+    return ctx.user.registered_at
+      ? ['Dein Konto ist bereits registriert. Mit /login erhältst du deinen Anmeldelink.']
+      : registration(ctx);
   if (command === '/einrichten') {
     const credential = await incomingCredential(ctx, parts[1]);
     if (!credential) return ['Der Einrichtungscode fehlt oder ist ungültig.'];
@@ -630,12 +664,6 @@ export async function handleAccountMessage(ctx: BotContext): Promise<string[] | 
     return ['Möchtest du dich als ersten Admin und Owner ernennen? Antworte mit JA oder NEIN.'];
   }
   if (command === '/login') {
-    if (!parts[1])
-      return ctx.user.registered_at
-        ? [
-            `Dein Konto ist aktiv. Web-Anmeldung: ${ctx.origin}/login. Erinnerungen: /start oder /stop. Kontodaten: /konto.`,
-          ]
-        : registration(ctx);
     const credential = await incomingCredential(ctx, parts[1]);
     if (!credential)
       return ['Dieser Anmeldecode ist ungültig. Starte die Anmeldung auf der TT-Webseite.'];
@@ -684,6 +712,23 @@ export async function handleAccountMessage(ctx: BotContext): Promise<string[] | 
       consentStatement(ctx, 'reminders', false),
       db
         .prepare(
+          'UPDATE trainer_summary_preferences SET enabled=0,version=version+1,updated_at=? WHERE user_id=? AND updated_at<=?',
+        )
+        .bind(ctx.timestamp, ctx.user.id, ctx.timestamp),
+      db
+        .prepare(
+          `INSERT OR IGNORE INTO consents(id,user_id,purpose,version,accepted,event_id,created_at)
+         SELECT ?,?,'trainer_summary','1',0,?,? WHERE EXISTS(
+           SELECT 1 FROM trainer_summary_preferences WHERE user_id=? AND enabled=0 AND updated_at=?)`,
+        )
+        .bind(crypto.randomUUID(), ctx.user.id, ctx.eventId, ctx.now, ctx.user.id, ctx.timestamp),
+      db
+        .prepare(
+          "UPDATE outbox_jobs SET status='cancelled',lease_until=NULL WHERE user_id=? AND kind='trainer_summary' AND status IN ('pending','retry','processing','leased') AND NOT EXISTS(SELECT 1 FROM trainer_summary_preferences WHERE user_id=? AND enabled=1)",
+        )
+        .bind(ctx.user.id, ctx.user.id),
+      db
+        .prepare(
           "UPDATE outbox_jobs SET status='cancelled',lease_until=NULL WHERE user_id=? AND kind IN ('personal_invite','personal_late','personal_change','invite','late') AND status IN ('pending','retry','processing','leased') AND EXISTS(SELECT 1 FROM users WHERE id=? AND reminders=0)",
         )
         .bind(ctx.user.id, ctx.user.id),
@@ -693,13 +738,13 @@ export async function handleAccountMessage(ctx: BotContext): Promise<string[] | 
         )
         .bind(ctx.user.id, ctx.user.id),
     ]);
-    if (!changes[1].meta.changes)
-      return [
-        'Eine neuere Erinnerungseinstellung liegt bereits vor. Mit /konto kannst du sie prüfen.',
-      ];
-    return [
-      'Persönliche Erinnerungen sind ausgeschaltet; noch geplante Erinnerungen wurden gestoppt. Dein Konto bleibt bestehen.',
-    ];
+    const summaryStillEnabled = await db
+      .prepare('SELECT 1 FROM trainer_summary_preferences WHERE user_id=? AND enabled=1')
+      .bind(ctx.user.id)
+      .first();
+    if (!changes[1].meta.changes || summaryStillEnabled)
+      return [`Eine neuere Nachrichteneinstellung liegt vor. Prüfe sie hier: ${ctx.origin}/konto`];
+    return ['Persönliche Erinnerungen und Trainerübersichten sind ausgeschaltet.'];
   }
   if (command === '/konto')
     return [

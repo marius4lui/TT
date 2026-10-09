@@ -144,7 +144,7 @@ describe('durable inbox normalization and replay protection', () => {
     expect(await db.prepare('SELECT response FROM attendance').first()).toEqual({
       response: 'yes',
     });
-    expect(await db.prepare('SELECT COUNT(*) AS n FROM outbox_jobs').first()).toEqual({ n: 1 });
+    expect(await db.prepare('SELECT COUNT(*) AS n FROM outbox_jobs').first()).toEqual({ n: 0 });
   });
   it('redacts bootstrap codes in persisted events while preserving the actual setup claim through a digest', async () => {
     const code = '1234567890abcdef1234567890abcdef';

@@ -148,7 +148,7 @@ describe('HTTP boundary and public privacy', () => {
     const redirect = await request('/r/training');
     expect(redirect.status).toBe(302);
     expect(redirect.headers.get('Location')).toBe(
-      'https://wa.me/491701234567?text=%2Fsp%C3%A4t%20training',
+      'https://wa.me/491701234567?text=Ich%20komme%20sp%C3%A4ter%20zum%20Training%20(training).',
     );
     expect(redirect.headers.get('Cache-Control')).toBe('no-store');
     await db.prepare("UPDATE training_sessions SET status='cancelled'").run();

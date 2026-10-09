@@ -8,6 +8,7 @@ import { processMessage } from './bot';
 import { all, setting, setSetting } from './db';
 import { hashToken } from './security';
 import type { Env } from './types';
+import { observeBotGroup } from './group-requests';
 
 type StoredEvent =
   | { kind: 'message'; event: MessageEvent & { credentialHash?: string } }
@@ -82,8 +83,10 @@ async function processControl(env: Env, event: ControlEvent, now: number): Promi
     !(await env.DB.prepare('SELECT jid FROM groups WHERE jid=? AND active=1')
       .bind(event.chatJid)
       .first())
-  )
+  ) {
+    if (event.action === 'add') await observeBotGroup(env, event.chatJid, now);
     return;
+  }
   if (event.action !== 'add' && event.action !== 'remove') return;
   for (const jid of event.participants) {
     const user = await env.DB.prepare('SELECT user_id FROM identity_aliases WHERE jid=?')
@@ -155,6 +158,14 @@ export async function cleanup(db: D1Database, now: number): Promise<void> {
   await db.batch([
     db.prepare('DELETE FROM conversations WHERE expires_at<?').bind(now),
     db.prepare('DELETE FROM auth_challenges WHERE expires_at<?').bind(now),
+    db.prepare('DELETE FROM auth_magic_links WHERE expires_at<?').bind(now),
+    db.prepare('DELETE FROM owner_transfers WHERE expires_at<?').bind(now),
+    db
+      .prepare(
+        "UPDATE group_requests SET invite_code=NULL,status='rejected',error='request_expired' WHERE expires_at<? AND status IN ('pending','joining','uncertain')",
+      )
+      .bind(now),
+    db.prepare('DELETE FROM group_requests WHERE expires_at<?').bind(now - 30 * day),
     db.prepare('DELETE FROM auth_sessions WHERE expires_at<?').bind(now),
     db.prepare('DELETE FROM admin_invites WHERE expires_at<?').bind(now),
     db.prepare('DELETE FROM rate_limits WHERE expires_at<?').bind(now),
@@ -176,7 +187,11 @@ export async function cleanup(db: D1Database, now: number): Promise<void> {
         "UPDATE outbox_jobs SET text='',status='expired' WHERE expires_at<? AND status='pending'",
       )
       .bind(now),
-    db.prepare('DELETE FROM outbox_jobs WHERE created_at<?').bind(now - 30 * day),
+    db
+      .prepare(
+        "DELETE FROM outbox_jobs WHERE created_at<? AND dedupe_key NOT LIKE 'group-welcome:%'",
+      )
+      .bind(now - 30 * day),
     db
       .prepare(
         'DELETE FROM attendance WHERE session_id IN (SELECT id FROM training_sessions WHERE end_at<?)',

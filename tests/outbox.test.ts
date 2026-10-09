@@ -73,6 +73,18 @@ async function job(overrides: Partial<QueueInput> = {}) {
 }
 
 describe('durable planning and delivery guards', () => {
+  it('renders delayed late reminders using the actual remaining time at delivery', async () => {
+    await job({
+      kind: 'late',
+      text: 'old nominal reminder',
+      due: times.lateReminderAt,
+      expires: times.endAt,
+    });
+    const mock = sender();
+    expect(await sendOutbox(env, times.startAt - 7 * 60_000, mock.client)).toBe(1);
+    expect(mock.sendText.mock.calls[0][1]).toContain('7 Minuten');
+    expect(mock.sendText.mock.calls[0][1]).not.toContain('30 Minuten');
+  });
   it('deduplicates logical jobs and records one successful provider message', async () => {
     await job({ key: 'stable-key' });
     await job({ key: 'stable-key' });

@@ -180,6 +180,7 @@ try {
           'MESSAGES_UPDATE',
           'CONNECTION_UPDATE',
           'GROUP_PARTICIPANTS_UPDATE',
+          'GROUPS_UPSERT',
         ],
       },
     });
@@ -196,6 +197,7 @@ try {
       'MESSAGES_UPDATE',
       'CONNECTION_UPDATE',
       'GROUP_PARTICIPANTS_UPDATE',
+      'GROUPS_UPSERT',
     ];
     if (
       !Array.isArray(configured.events) ||

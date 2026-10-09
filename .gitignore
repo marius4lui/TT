@@ -1,5 +1,7 @@
 node_modules/
 .wrangler/
+.playwright-cli/
+output/playwright/
 dist/
 coverage/
 .dev.vars*

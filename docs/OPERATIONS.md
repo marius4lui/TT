@@ -1,124 +1,67 @@
-# Betrieb
+﻿# Betrieb
 
-Worker, Website, EU-D1 und Minuten-Cron sind seit 8. Oktober 2026 auf `tt.bz3.eu` veröffentlicht. Seit 9. Oktober ist die echte Evolution-Instanz mit Secret und authentifiziertem Webhook verbunden. Der Nutzer hat Owner-Einrichtung, Auswahl der eigenen Demogruppe und den Hinweis für den privaten Funktionstest über WhatsApp bestätigt. Web-Login ist freigeschaltet; automatische Trainingsnachrichten bleiben bis zur bestätigten Aktivierung pausiert. Vor regulärem Einsatz die Schritte aus [ACCEPTANCE.md](ACCEPTANCE.md) durchführen.
+Stand: 9. Oktober 2026. Das bestehende Hosting auf `tt.bz3.eu` umfasst Worker, Website, EU-D1 und Minuten-Cron. Evolution und der authentifizierte Webhook sind angeschlossen; der Owner hat die eigene Demogruppe und den Hinweis für den bisherigen privaten Funktionstest bestätigt. Automatische Trainingsnachrichten bleiben pausiert. Die neue Verwaltung über die Website ist lokal geprüft, aber noch nicht veröffentlicht oder mit dem vollständigen Ablauf an echten WhatsApp-Geräten abgenommen. Vor regulärem Einsatz die offenen Punkte aus [ACCEPTANCE.md](ACCEPTANCE.md) abschließen.
 
-## Voraussetzungen und Konfiguration
+## Alltag über die Website
 
-`wrangler.jsonc` enthält die veröffentlichte Worker-/Domain-Konfiguration, tatsächliche D1-ID sowie die angeschlossene Evolution-URL und Instanz. Die Datenbank `tt` besteht bereits und darf für die weitere Einrichtung nicht neu angelegt werden. Der API-Key liegt als Cloudflare Secret und lokal verschlüsselt vor; siehe [CREDENTIALS.md](CREDENTIALS.md).
+Privat „anmelden“ oder `/login` an den Bot schreiben. Seine Antwort enthält einen persönlichen, einmaligen Anmeldelink mit zehn Minuten Laufzeit. Die Website zeigt den erkannten Namen und eine gekürzte Kontokennung; erst der ausdrückliche Klick bestätigt die Anmeldung. Ein Vorschauaufruf verbraucht den Link nicht. Der Link ist ein Zugangsnachweis: Wer ihn besitzt, kann die angezeigte Identität bestätigen und sich anmelden. Deshalb niemals weiterleiten. Ein neuer Link widerruft einen noch offenen älteren Link. Die Authentifizierungsdatensätze speichern Token-Hashes; der Link liegt für die Zustellung kurzzeitig im privaten Antwortauftrag, dessen Inhalt nach erfolgreichem Versand entfernt wird. Tokens und Sessionwerte gehören nicht in Logs.
 
-Der Worker benötigt zur Laufzeit:
+Owner und Admin gelangen direkt in den geschützten Bereich `/trainer`. Eine Teilnehmerregistrierung ist für Trainer weder erforderlich noch automatisch damit verbunden. Jede Traineranfrage prüft die aktuelle Rolle; Änderungen prüfen Rolle und betroffene Versionen nochmals im Datenbank-Commit. Websessions gelten höchstens sieben Tage. Trainersessions enden zusätzlich nach 24 Stunden ohne Aktivität; Nutzung verlängert die absolute Höchstlaufzeit nicht. Logout widerruft die betreffende Serversession. Sitzungscookies sind Secure, HttpOnly und SameSite.
 
-- `EVOLUTION_URL`: Basis-URL der Evolution-API
-- `EVOLUTION_INSTANCE`: geprüfter Instanzname, wie ihn die API erwartet
-- `EVOLUTION_API_KEY`: Evolution-Zugangsschlüssel; als Secret behandeln
+Der Trainerbereich verwaltet Gruppen, wöchentliche Serien, einzelne Trainings, Verschiebungen, Absagen und Pausen. Entfernte Ausnahmen stellen nur die betroffenen Termine wieder her; andere Absagen bleiben erhalten. Terminänderungen machen alte Zusagen als erneut zu bestätigen sichtbar. Die Teilnahmeübersicht enthält Mitglieder, Zusagen, Absagen, Verspätungen und offene Antworten. Manuelle Korrekturen prüfen den aktuellen Termin und den bisherigen Antwortstand. Öffentliche Trainingsinformationen und Datenschutzhinweise werden hier gepflegt. Die verantwortliche Stelle prüft die vollständigen Hinweise und bestätigt die Veröffentlichung; den Freigabewert `privacy_ready` nicht direkt in D1 ändern.
 
-Für Wrangler lokal kommt `EVOLUTION_API_KEY` aus `.dev.vars`; diese Datei ist durch `.gitignore` ausgeschlossen und bleibt lokal. Das Einrichten der lokalen Worker-Umgebung und das Starten eines Node-Skripts sind getrennte Prozesse: `.dev.vars` wird nicht automatisch in die Prozessumgebung von `scripts/setup.mjs` übernommen. `--remote --connect` liest alle drei Werte aus der Prozessumgebung. Auf Cloudflare wird `EVOLUTION_API_KEY` als Worker-Secret gesetzt; der API-Key darf nicht in `vars`, `wrangler.jsonc`, GitHub-Dateien oder das Frontend geschrieben werden. Zugangsdaten und vollständige Webhook-Payloads gehören nicht in Logs.
+Teilnahme bleibt ohne Webkonto möglich. Mitglieder reagieren mit 👍 oder 👎 auf die Trainingsabfrage und mit ⏰ auf die Verspätungsabfrage; das Entfernen der ⏰-Reaktion nimmt diese Meldung zurück. Gruppenreaktionen erzeugen keine zusätzlichen Bestätigungsnachrichten. Private Formulierungen wie „Ich komme zehn Minuten später“ werden mit begrenzten deutschen Mustern erkannt. Mehrdeutige Aussagen führen zu einer Rückfrage; TT versteht nicht beliebige natürliche Sprache.
 
-## D1 und Worker
+Ein freiwilliges Mitgliederkonto benötigt eine ausdrückliche Zustimmung auf der Website. Persönliche Mitgliedererinnerungen sind eine zweite, getrennte Zustimmung und zunächst ausgeschaltet. Auf `/konto` lassen sich Name und Erinnerungen ändern, die eigenen Daten abrufen und das Konto löschen. Ein Widerruf sperrt auch bereits geplante persönliche Sendungen.
 
-1. Vor jeder lokalen Entwicklung Abhängigkeiten installieren und `pnpm check` ausführen.
-2. Lokales Schema mit `pnpm db:migrate:local` anwenden. Das ändert die lokale Wrangler-Datenbank.
-3. Für eine gezielte Remote-Migration ist `pnpm db:migrate:remote` vorhanden. Vorher Zielkonto und Datenbank-ID kontrollieren sowie einen geeigneten Wiederherstellungspunkt erfassen. Ein Worker-Rollback setzt D1 nicht zurück.
-4. `pnpm dev` startet Wranglers lokalen Worker. Das allein beweist weder Evolution-Erreichbarkeit noch Ende-zu-Ende-Nachrichten.
+Trainer können unabhängig davon ihre persönliche Trainerübersicht einschalten. Sie ist zunächst aus und benötigt keine Teilnehmerregistrierung. Der Vorlauf beträgt standardmäßig zehn Minuten und kann zwischen null und 120 Minuten eingestellt werden. Anzahl der Rückmeldungen, Absagen und Verspätungen sind getrennt wählbar. Die Nachricht verwendet den aktuellen Antwortstand beim Versand. Geänderte Einstellungen, Widerruf, Rollenentzug oder eine geänderte Terminversion sperren alte Aufträge. Ein neues Opt-in löst keine rückwirkende Übersicht aus.
 
-Die erste Migration setzt `enabled=0` und `privacy_ready=0`; geplante Nachrichten bleiben laut Worker-Sendelogik gesperrt, bis beides freigegeben wurde. Die verantwortliche Stelle richtet die abgestimmten Hinweise per `/datenschutz TEXT` ein und bestätigt die Änderung. Erst dieser bestätigte Vorgang setzt `privacy_ready`; den Datenbankwert nicht manuell ändern.
+## Gruppenfreigabe und Aktivierung
 
-## Setup-CLI und Webhook
+Einen WhatsApp-Gruppenlink im Trainerbereich einfügen. TT prüft die Gruppenmetadaten und legt zunächst eine offene Freigabeanfrage an. Erst die ausdrückliche Freigabe durch einen Trainer erlaubt Beitritt beziehungsweise Aktivierung und die einmalige Begrüßung „Powered by KMUC“. Ein unklarer Beitrittsversuch bleibt als solcher sichtbar und wird vor einer erneuten Aktion abgeglichen.
 
-Migrationen zuerst auf das ausdrücklich gewählte D1-Ziel anwenden. Die lokalen Befehle lauten:
+Wird der Bot direkt einer Gruppe hinzugefügt, entdeckt TT sie über `GROUPS_UPSERT` beziehungsweise beim Aktualisieren der Gruppen. Auch dieser Weg erzeugt zuerst eine offene Anfrage. Das Auswählen einer Gruppe aktiviert sie nicht: Die Auswahl akzeptiert nur bereits freigegebene, aktive Gruppen. Mitgliedschaften und Begrüßung werden durch den Freigabeablauf gepflegt.
+
+Vor dem Start die Gruppe informieren und Datenschutzhinweise prüfen. Trainingsnachrichten erst danach im Trainerbereich ausdrücklich aktivieren. Eine Gruppenfreigabe mit Begrüßung ist vom Aktivieren der regelmäßigen Trainingsnachrichten getrennt. Pausieren sperrt geplante Trainingssendungen; beim erneuten Aktivieren werden nur unversuchte zukünftige Aufträge der aktuellen Terminversion wieder freigegeben. Unklare oder schon versuchte Sendungen werden dadurch nicht wiederholt. Die Versandansicht zeigt den letzten Cronlauf, Auftragszahlen und nächste Termine, auch während der Pause.
+
+## Konfiguration und lokale Prüfung
+
+`wrangler.jsonc` enthält die Worker-/Domain-Konfiguration, die vorhandene D1-ID sowie Evolution-URL und Instanz. Die bestehende Datenbank `tt` nicht neu anlegen. Der Worker benötigt `EVOLUTION_URL`, `EVOLUTION_INSTANCE` und `EVOLUTION_API_KEY`. Lokal liest Wrangler den API-Key aus der ignorierten Datei `.dev.vars`; auf Cloudflare liegt er als Worker-Secret. Er gehört niemals in `vars`, Git, Frontend-Dateien oder Logs. Die verschlüsselte Windows-Eingabe und Prüfung sind in [CREDENTIALS.md](CREDENTIALS.md) beschrieben.
+
+```sh
+pnpm install --frozen-lockfile
+pnpm check
+pnpm db:migrate:local
+pnpm smoke
+pnpm dev
+```
+
+`pnpm check` prüft Typen, Tests, Operator-Skripte und den Worker-Dry-Run. `pnpm smoke` verwendet einen echten lokalen Wrangler/workerd, eine isolierte D1 und einen lokalen Mock-Evolution-Server. Es sind weder ein externes Konto noch echte Nachrichten beteiligt. Erfolgreiche lokale Läufe ersetzen keine reale Zustellungs- oder Geräteabnahme. CI deployed nichts; der derzeit bekannte Abrechnungsblock ist kein erfolgreicher CI-Nachweis.
+
+Neue Migrationen vor einem passenden Worker-Deploy auf das richtige Ziel anwenden. `pnpm db:migrate:remote` verändert die Remote-D1; zuvor Konto, Datenbank-ID und Wiederherstellungspunkt prüfen. Ein Worker-Rollback setzt D1 nicht zurück. Bestehende Owner-, Gruppen- und Datenschutzzustände beibehalten und den Nachrichtenbetrieb während der Umstellung pausiert lassen. Die neue Webversion und ihre additiven Migrationen sind getrennt vom schon veröffentlichten Hosting zu behandeln.
+
+## Einmalige Einrichtung und Webhook
+
+Nur für eine neue Einrichtung nach den Migrationen ausführen:
 
 ```sh
 node scripts/setup.mjs --local
-```
-
-`--local` legt einen zufälligen Bootstrap-Code mit 30 Minuten Laufzeit in der lokalen D1-Datenbank ab und zeigt `/einrichten CODE` an. Dieser Code wird privat an den Bot geschickt und danach mit `JA` bestätigt. Ein abgebrochener oder abgelaufener Versuch kann bewusst mit `pnpm run setup --local --reset-bootstrap` zurückgesetzt werden; eine abgeschlossene Owner-Einrichtung wird niemals zurückgesetzt.
-
-Für D1 in Cloudflare:
-
-```sh
 node scripts/setup.mjs --remote
 node scripts/setup.mjs --remote --connect
 ```
 
-`--remote` erzeugt den Bootstrap-Code in der bereits migrierten Remote-Datenbank. `--remote --connect` verlangt `EVOLUTION_URL`, `EVOLUTION_INSTANCE` und `EVOLUTION_API_KEY` ausschließlich in der Prozessumgebung. Das Skript prüft die HTTPS-API und verbundene Instanz, liest die Botnummer aus Evolution, prüft einen eventuell vorhandenen Webhook, speichert den Hash eines neuen zufälligen Bearer-Tokens in D1, setzt `EVOLUTION_API_KEY` als Cloudflare-Worker-Secret und richtet den authentifizierten Evolution-Webhook ein. Beim Readback prüft es URL, Aktivierung, `Authorization: Bearer …` und die Ereignisse `MESSAGES_UPSERT`, `MESSAGES_UPDATE`, `CONNECTION_UPDATE` und `GROUP_PARTICIPANTS_UPDATE`; außerdem muss das Routing `byEvents` ausgeschaltet sein. Falls für die Instanz bereits ein anderer Webhook aktiv ist, bricht es ab; nur mit `--replace-webhook` wird der Austausch ausdrücklich erlaubt.
+`--local` und `--remote` wählen das D1-Ziel und erzeugen einen zufälligen Bootstrap-Code mit 30 Minuten Laufzeit. Privat `/einrichten CODE` senden und den reservierten ersten Owner mit `JA` bestätigen. Einen nicht abgeschlossenen Versuch kann `--reset-bootstrap` bewusst erneuern; eine abgeschlossene Owner-Einrichtung wird nicht zurückgesetzt. Für die bereits eingerichtete Demoinstanz keinen neuen Bootstrap anlegen.
 
-Das Skript sendet keine WhatsApp-Nachrichten und aktiviert TT nicht. Es setzt den Nachrichtenbetrieb auf pausiert; erst `/aktivieren` gibt ihn nach dem Einrichten und Prüfen der Datenschutzhinweise frei. Für `--connect` müssen `EVOLUTION_URL` und `EVOLUTION_INSTANCE` außerdem zu derselben Instanz in `wrangler.jsonc` passen. Das Skript deployed den Worker nicht. Vor Remote-Ausführung Datenbank, Konto, Instanz und Auswirkungen prüfen. CI deployed ebenfalls nicht; ein manueller Deploy darf erst nach Ersetzen der Platzhalter, Anlegen der Ressourcen und Abschluss der Freigabe erfolgen.
+`--remote --connect` liest alle drei Evolution-Werte aus der Prozessumgebung. `.dev.vars` wird vom separaten Node-Skript nicht automatisch geladen. Das Skript prüft HTTPS, verbundene Instanz und Botidentität, setzt den Worker-API-Key als Secret und registriert einen authentifizierten Webhook. D1 speichert den Hash seines zufälligen Bearer-Tokens. Der Readback prüft URL, Aktivierung, Authentifizierungsheader und `MESSAGES_UPSERT`, `MESSAGES_UPDATE`, `CONNECTION_UPDATE`, `GROUP_PARTICIPANTS_UPDATE` sowie `GROUPS_UPSERT`; `byEvents` muss ausgeschaltet sein. Ein fremder bestehender Webhook wird nur mit ausdrücklichem `--replace-webhook` ersetzt.
 
-Das Kommando ist in `package.json` als `setup` eingetragen. Verwende `pnpm run setup --local` (oder `pnpm run setup --remote --connect`); `pnpm setup` kollidiert mit einer pnpm-Abkürzung. Der direkte Aufruf `node scripts/setup.mjs --local` ist ebenfalls eindeutig. Alle unterstützten Flags stehen mit `node scripts/setup.mjs --help` bereit.
-
-| Option              | Wirkung                                                                            |
-| ------------------- | ---------------------------------------------------------------------------------- |
-| `--local`           | lokale D1 verwenden und Bootstrap-Code erzeugen                                    |
-| `--remote`          | Remote-D1 verwenden und Bootstrap-Code erzeugen                                    |
-| `--connect`         | nur zusammen mit `--remote`; Evolution-Verbindung prüfen und Webhook einrichten    |
-| `--reset-bootstrap` | einen nicht abgeschlossenen Einrichtungsversuch bewusst neu beginnen               |
-| `--replace-webhook` | nur zusammen mit Remote-Verbindung einen vorhandenen abweichenden Webhook ersetzen |
-| `--help`            | Hilfe ohne Setup-Aktion anzeigen                                                   |
-
-## WhatsApp-Befehle
-
-Der hier aufgeführte Vertrag ist der vorgesehene Produktumfang. Nicht aufgeführte Optionen oder zusätzliche Bestätigungsregeln sind nicht zugesichert. Schreib Befehle für die Verwaltung privat an den Bot. Im Gruppenkontext keine Einrichtungscodes oder Login-Codes senden.
-
-| Befehl                                      | Verwendung                                                                                                                                       |
-| ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `/hilfe`                                    | Hilfe und verfügbare Befehle anzeigen                                                                                                            |
-| `/gruppen`                                  | erkannte Gruppen zur Auswahl anzeigen                                                                                                            |
-| `/gruppe JID`                               | Trainingsgruppe anhand ihrer WhatsApp-JID festlegen                                                                                              |
-| `/training`                                 | Dialog zur wöchentlichen Trainingsserie starten; Gruppe, Wochentag, Zeiten und Ort durchgehen                                                    |
-| `/termine`                                  | kommende Termine anzeigen                                                                                                                        |
-| `/ausfall DATE` oder `/ausfall ID`          | einzelnen Termin auswählen und absagen                                                                                                           |
-| `/pause FROM TO`                            | Serie für einen Zeitraum aussetzen                                                                                                               |
-| `/verschieben DATE NEWDATE TIME`            | Termin auf neues Datum und Uhrzeit verschieben                                                                                                   |
-| `/sondertraining DATE START END [LOCATION]` | zusätzlichen Einzeltermin anlegen; Ort ist optional                                                                                              |
-| `/übersicht`                                | Rückmeldungen und Verspätungen für einen Termin anzeigen                                                                                         |
-| `/info TEXT`                                | öffentlichen Trainingstext setzen                                                                                                                |
-| `/datenschutz TEXT`                         | Datenschutzhinweise setzen                                                                                                                       |
-| `/aktivieren` / `/deaktivieren`             | TT-Nachrichtenbetrieb aktivieren oder anhalten                                                                                                   |
-| `/status`                                   | Betriebs- und Versandstatus prüfen                                                                                                               |
-| `/nachricht ID wiederholen`                 | fehlgeschlagene oder unklare Nachricht nach Prüfung manuell erneut senden; bei unklarem Ergebnis kann eine doppelte WhatsApp-Nachricht entstehen |
-| `/bestätigen` / `/abbrechen`                | die ausstehende Änderung übernehmen oder verwerfen                                                                                               |
-| `/ja TERMIN` / `/nein TERMIN`               | persönlich für einen Termin zu- oder absagen                                                                                                     |
-| `/spät TERMIN [MINUTEN]`                    | persönliche Verspätung melden; alternativ mit `⏰` auf die Verspätungsnachricht reagieren                                                        |
-| `/pünktlich TERMIN`                         | persönliche Verspätungsmeldung für den Termin zurücknehmen                                                                                       |
-| `/serie beenden ID`                         | eine wöchentliche Trainingsserie beenden und die betroffenen Zukunftstermine absagen                                                             |
-| `/einrichten CODE`                          | einmalige Einrichtung anfordern; die erste Owner-Rolle wird danach separat mit `JA` oder `NEIN` bestätigt                                        |
-| `/admin`                                    | Rollen und offene Einladungen anzeigen                                                                                                           |
-| `/admin einladen` / `/admin übertragen`     | Admin-Einladung oder Owner-Übertragung starten                                                                                                   |
-| `/admin CODE`                               | Einladung als konkrete WhatsApp-Identität annehmen                                                                                               |
-| `/admin bestätigen ID`                      | als Owner die angezeigte WhatsApp-Identität einer Einladung prüfen; anschließend `JA` oder `NEIN`                                                |
-| `/admin entfernen USER-ID`                  | als Owner eine angezeigte Admin-Identität zum Entfernen auswählen; anschließend `JA` oder `NEIN`                                                 |
-| `/login`                                    | freiwilliges Konto anlegen oder Web-Anmeldung öffnen                                                                                             |
-| `/start` / `/stop`                          | persönliche Erinnerungen nach separatem Opt-in einschalten oder widerrufen                                                                       |
-| `/konto` / `/daten` / `/löschen`            | Konto anzeigen, Auskunft starten oder Kontolöschung anfragen; Bestätigung per `JA` oder `NEIN`                                                   |
-
-Datumsbeispiele verwenden ISO-Format `YYYY-MM-DD`, Uhrzeiten `HH:mm`. `/training` ist ein Dialog; für eine tatsächliche Änderung die angezeigte Zusammenfassung prüfen und ausdrücklich bestätigen. Die Teilnahme ist unabhängig von einem TT-Konto. Persönliche Erinnerungen brauchen eine separate freiwillige Zustimmung und können widerrufen werden.
-
-Bei Anmelde-, Einrichtungs-, Einladungs- und Löschdialogen wird die Bestätigung als direkte Nachricht `JA` oder `NEIN` erwartet. `/bestätigen` und `/abbrechen` gehören zum ausstehenden Trainings-/Änderungsdialog. `/nachricht ID wiederholen` kann eine unklare Sendung doppelt zustellen; erst prüfen, ob sie bereits in WhatsApp steht. Die Kontobefehle `/login`, `/start`, `/stop`, `/konto`, `/daten` und `/löschen` gehören in einen privaten Chat. Eine WhatsApp-Anmeldung stellt keine amtliche Identität fest.
-
-## Öffentliche Seiten und Anmeldung
-
-Die öffentliche Website stellt `/`, `/info`, `/datenschutz`, `/login` und `/konto` bereit. Trainertexte werden aus der Konfiguration gerendert und HTML-escaped. Leere Datenschutzhinweise sind kein Freigabestatus: verantwortliche Stelle und vollständige Hinweise über `/datenschutz TEXT` eintragen und die vorgesehene Bestätigung abschließen. Dieser bestätigte Änderungsvorgang setzt `privacy_ready`; keine manuelle D1-Änderung vornehmen.
-
-Die Webanmeldung startet aktiv per POST, bindet eine kurzlebige Challenge an den Browser und verlangt die Bestätigung in WhatsApp. Nur derselbe Browser kann die bestätigte Challenge per POST gegen eine Serversession tauschen. Ein GET-Aufruf allein authentifiziert niemanden. Der von der Website erzeugte WhatsApp-Link kann den einmaligen Code als vorgefüllten Chattext enthalten; dieser Link darf nicht als Login-URL behandelt oder protokolliert werden. Codes und Sessionwerte gehören nicht in TT-URLs oder Logs. Persönliche Erinnerungen sind eine eigenständige, standardmäßig ausgeschaltete Entscheidung.
+Das Setup-Skript sendet keine WhatsApp-Nachrichten, aktiviert keine Trainingsautomatik und deployed keinen Worker. `EVOLUTION_URL` und `EVOLUTION_INSTANCE` müssen zum selben Ziel in `wrangler.jsonc` passen. Alle Flags stehen unter `node scripts/setup.mjs --help`. Bei pnpm ausdrücklich `pnpm run setup …` verwenden; `pnpm setup` kollidiert mit der pnpm-eigenen Abkürzung.
 
 ## Ausfälle und Wiederanlauf
 
-- Bei WhatsApp-/Evolution-Ausfall Trainingsänderungen nicht als zugestellt behandeln. Die Gruppe kann vorübergehend manuell organisiert werden.
-- `uncertain`-Nachrichten nicht blind erneut senden: der Anbieter könnte die Nachricht angenommen haben, obwohl der Worker keine Antwort erhalten hat.
-- Vor Remote-Migrationen den Zielbereich prüfen und einen geeigneten Wiederherstellungspunkt erfassen. Nach einer D1-Wiederherstellung Versand und Setup zunächst gesperrt lassen, bis gespeicherte Jobs und Codes geprüft sind.
-- Fehlerberichte ohne API-Key, Login-Code, vollständige Telefonnummer/JID und Nachrichteninhalt erstellen.
+Einladungen, Änderungen und persönliche Übersichten liegen dauerhaft in D1. Versand prüft Terminversion, Gruppenzustand und gegebenenfalls aktuelle Rolle und Zustimmung. Begrenzte Wiederholungen sind nur bei eindeutig wiederholbaren Fehlern erlaubt. Bei Timeout nach möglicher Annahme oder unterbrochenem Sender bleibt der Auftrag `uncertain`; nicht blind erneut senden, da die Nachricht schon in WhatsApp stehen könnte.
 
-## Anschluss der späteren Evolution-Instanz
+Bei Provider-Ausfall Änderungen nicht als zugestellt behandeln und das Training vorübergehend manuell organisieren. Nach einer D1-Wiederherstellung zunächst pausiert bleiben, gespeicherte Jobs und Anmeldelinks prüfen und erst anschließend bewusst freigeben. Fehlerberichte enthalten keine API-Keys, vollständigen Telefonnummern/JIDs, Anmeldelinks oder Nachrichteninhalte.
 
-Das Hosting ist bereits abgeschlossen. Sobald die Zugangsdaten vorhanden sind:
+## Ältere Chatbefehle
 
-1. Die neue Nummer mit der Evolution-Instanz verbinden. `EVOLUTION_URL` und `EVOLUTION_INSTANCE` in `wrangler.jsonc` auf diese Instanz setzen. D1-ID und Domain beibehalten.
-2. Lokal `pnpm check` ausführen und die Konfigurationsänderung im privaten Repository speichern.
-3. Prüfen, dass D1-ID, Domain, Evolution-URL und Instanzname zusammengehören. Nur bei neuen Migrationen `pnpm db:migrate:remote` ausführen; die vier vorhandenen Migrationen sind bereits angewendet.
-4. Die neuen Provider-Einstellungen veröffentlichen: `pnpm deploy`. TT bleibt pausiert.
-5. Die drei Evolution-Werte in der Prozessumgebung bereitstellen und `pnpm run setup --remote --connect` ausführen. Das CLI setzt das Worker-Secret, registriert und überprüft den authentifizierten Webhook und erzeugt den Bootstrap-Code. Es sendet keine WhatsApp-Nachrichten.
-6. Den Bootstrap-Code ausschließlich privat mit `/einrichten CODE` an den Bot senden und den ersten Owner mit `JA` bestätigen.
-7. Owner wählt die Gruppe mit `/gruppen` und `/gruppe JID`, richtet Trainingszeiten sowie vollständige Hinweise mit `/datenschutz TEXT` ein und bestätigt die Änderungen. Vor dem Einschalten die Testgruppe informieren.
-8. Die Live-Abnahme aus [ACCEPTANCE.md](ACCEPTANCE.md) durchführen. Erst danach den Nachrichtenbetrieb mit `/aktivieren` einschalten und die Änderung bestätigen.
-
-Der normale CI-Workflow deployt nichts. Ein Bootstrap-Code wird erst bei dieser Einrichtung erzeugt, da er nach 30 Minuten abläuft.
+Ältere Befehle und der browsergebundene Code-Login bleiben für Kompatibilität und Operator-Tests erhalten. Sie sind keine Anleitung für den normalen Mitglieder- oder Trainerablauf. Terminverwaltung, Zustimmungen und Gruppenfreigabe erfolgen über die Website. Die einmalige Owner-Einrichtung mit `/einrichten CODE` ist weiterhin ein separater administrativer Schritt. Die alte Annahme „ein weitergeleiteter Anmeldelink kann niemals anmelden“ gilt für den neuen persönlichen Link ausdrücklich nicht.
