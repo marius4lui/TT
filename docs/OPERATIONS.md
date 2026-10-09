@@ -1,10 +1,10 @@
 # Betrieb
 
-Worker, Website, EU-D1 und Minuten-Cron sind seit 8. Oktober 2026 auf `tt.bz3.eu` veröffentlicht. Nachrichtenbetrieb und Registrierung sind noch gesperrt; es gibt noch keine neue Rufnummer, Evolution-Anbindung oder Owner-Einrichtung. Vor WhatsApp-Einsatz die Schritte aus [ACCEPTANCE.md](ACCEPTANCE.md) mit einer ausgewählten Testgruppe durchführen.
+Worker, Website, EU-D1 und Minuten-Cron sind seit 8. Oktober 2026 auf `tt.bz3.eu` veröffentlicht. Seit 9. Oktober ist die echte Evolution-Instanz mit Secret und authentifiziertem Webhook verbunden. Eine eigene Demogruppe ist angelegt; automatischer Trainingsbetrieb und Registrierung bleiben gesperrt, bis Owner-Einrichtung und Datenschutzhinweise abgeschlossen sind. Vor Freigabe die Schritte aus [ACCEPTANCE.md](ACCEPTANCE.md) durchführen.
 
 ## Voraussetzungen und Konfiguration
 
-`wrangler.jsonc` enthält die veröffentlichte Worker-/Domain-Konfiguration und die tatsächliche D1-ID. Die Datenbank `tt` besteht bereits und darf für die weitere Einrichtung nicht neu angelegt werden. Nur `EVOLUTION_URL` und `EVOLUTION_INSTANCE` sind noch Platzhalter. Die drei Provider-Werte erst mit der neuen, verbundenen Instanz konfigurieren.
+`wrangler.jsonc` enthält die veröffentlichte Worker-/Domain-Konfiguration, tatsächliche D1-ID sowie die angeschlossene Evolution-URL und Instanz. Die Datenbank `tt` besteht bereits und darf für die weitere Einrichtung nicht neu angelegt werden. Der API-Key liegt als Cloudflare Secret und lokal verschlüsselt vor; siehe [CREDENTIALS.md](CREDENTIALS.md).
 
 Der Worker benötigt zur Laufzeit:
 

@@ -39,11 +39,35 @@ und Änderungsnachrichten werden jeweils atomar in D1 gespeichert.
 
 ## Bewusst noch nicht bestätigt
 
-Eine neue Telefonnummer und Evolution-Instanz stehen noch nicht zur Verfügung.
-Echte Provider-Payloads, Reaktionen und Kontaktkarten auf Android/iOS,
+Die ersten Hosting-Prüfungen erfolgten noch ohne Evolution-Zugang. Seit 9. Oktober
+ist die Instanz verbunden (siehe unten). Echte Reaktionen und Kontaktkarten auf Android/iOS,
 WhatsApp-Zustellung und der aktivierte Trainingsbetrieb sind daher offen.
 Es fand kein Browser-Visualtest statt. Cookie- und Loginprotokolle wurden über
 HTTP getestet; das ersetzt die spätere Geräteabnahme nicht.
+
+## Evolution-Anschluss am 9. Oktober 2026
+
+- Vom Nutzer gespeicherte Zugangsdaten erfolgreich mit Windows DPAPI entschlüsselt;
+  keine erneute Eingabe, keine Klartextdatei und kein API-Key in Git.
+- Echte Instanzverbindung und Botidentität geprüft; eigene Demogruppe mit genau
+  Bot und freigegebenem zweiten Konto angelegt. Testnachricht mit Provider-ID angenommen.
+- Tatsächliche Gruppenmetadaten enthalten LID sowie explizite PN-Verknüpfung.
+  Adapter und Demo-Prüfung berücksichtigen diese Zuordnung. LID-Ziffern werden
+  weiterhin nicht als Telefonnummer interpretiert; Regressionstest ergänzt.
+- Worker-Konfiguration veröffentlicht; API-Key als Cloudflare Secret gesetzt.
+  Webhook-Adresse, Authentifizierungsheader und vier Ereignisabonnements über
+  Evolution erneut gelesen und erfolgreich verifiziert.
+- Remote-D1-Abfragen im Setup auf `--command` umgestellt: `--file` ist beim
+  Remote-Ziel ein Import und liefert keine SELECT-/RETURNING-Ergebniszeilen.
+- 159 Vitest-Tests, sieben zusätzliche Operator-Tests, Windows-DPAPI-Test,
+  Typecheck, Worker-Build, Formatierung und lokaler workerd-Smoketest erfolgreich.
+- Echte Owner-Bestätigung, Gruppenauswahl, Registrierung, Reaktionen und Login
+  stehen noch aus. Dafür muss der Nutzer vom zweiten WhatsApp-Konto handeln;
+  keine Identitätsnachweise wurden simuliert. Automatik bleibt pausiert.
+
+Die lokale Testnummer, Gruppenkennung und das Demo-Journal liegen nur im
+geschützten Windows-Profil. Telefonnummern, API-Key und Einrichtungscode werden
+in diesem Prüfprotokoll nicht gespeichert.
 
 Die Regeln zur Erkennung von Verspätungen decken die getesteten deutschen
 Formulierungen ab. Sie garantieren kein Verständnis beliebiger natürlicher

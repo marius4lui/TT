@@ -18,7 +18,7 @@
     },
   ],
   "triggers": { "crons": ["* * * * *"] },
-  "vars": { "EVOLUTION_URL": "https://evolution.example.invalid", "EVOLUTION_INSTANCE": "tt" },
+  "vars": { "EVOLUTION_URL": "https://wa.kmuc.cc", "EVOLUTION_INSTANCE": "kmuc" },
   "observability": { "enabled": true },
   "limits": { "cpu_ms": 30000 },
 }

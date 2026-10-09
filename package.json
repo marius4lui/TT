@@ -13,14 +13,16 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "check": "tsc --noEmit && vitest run && wrangler deploy --dry-run --outdir dist",
+    "check": "tsc --noEmit && vitest run && node --test scripts/tests/evolution-live.test.mjs && wrangler deploy --dry-run --outdir dist",
     "smoke": "node scripts/smoke.mjs",
     "db:migrate:local": "wrangler d1 migrations apply DB --local",
     "db:migrate:remote": "wrangler d1 migrations apply DB --remote",
     "setup": "node scripts/setup.mjs",
     "deploy": "wrangler deploy",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "test:ops": "node --test scripts/tests/evolution-live.test.mjs",
+    "test:credentials": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/tests/credentials.test.ps1"
   },
   "dependencies": {
     "@js-temporal/polyfill": "^0.5.1",

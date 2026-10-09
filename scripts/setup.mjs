@@ -1,9 +1,8 @@
 import { randomBytes, createHash } from 'node:crypto';
 import { spawn } from 'node:child_process';
-import { writeFile, unlink, readFile } from 'node:fs/promises';
+import { readFile } from 'node:fs/promises';
 import { parse as parseJsonc } from 'jsonc-parser';
-import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
@@ -68,23 +67,22 @@ async function wrangler(argv, input) {
   });
 }
 async function sql(statement) {
-  const path = join(tmpdir(), `tt-setup-${randomBytes(12).toString('hex')}.sql`);
-  try {
-    await writeFile(path, statement, { mode: 0o600 });
-    const output = await wrangler([
-      'd1',
-      'execute',
-      'DB',
-      remote ? '--remote' : '--local',
-      '--file',
-      path,
-      '--json',
-    ]);
-    const parsed = JSON.parse(output);
-    return parsed.flatMap((item) => item.results ?? []);
-  } finally {
-    await unlink(path).catch(() => {});
-  }
+  // Remote --file is an import: it returns an import summary instead of SELECT /
+  // RETURNING rows. Use the query path for both environments. SQL contains only
+  // configuration and random credential hashes, never API keys or raw codes.
+  const output = await wrangler([
+    'd1',
+    'execute',
+    'DB',
+    remote ? '--remote' : '--local',
+    '--command',
+    statement,
+    '--json',
+  ]);
+  const parsed = JSON.parse(output);
+  if (!Array.isArray(parsed) || parsed.some((item) => item.success !== true))
+    throw new Error('Die Datenbankabfrage wurde nicht erfolgreich bestätigt.');
+  return parsed.flatMap((item) => item.results ?? []);
 }
 async function api(path, body) {
   const base = new URL(process.env.EVOLUTION_URL);
@@ -107,6 +105,15 @@ try {
   const state = (await sql('SELECT state,expires_at FROM bootstrap WHERE id=1;'))[0];
   const existingOwners =
     (await sql("SELECT COUNT(*) AS n FROM roles WHERE role='owner';"))[0]?.n ?? 0;
+  if (
+    state &&
+    state.state !== 'completed' &&
+    existingOwners === 0 &&
+    !args.has('--reset-bootstrap')
+  )
+    throw new Error(
+      'Ein Einrichtungsversuch existiert bereits. Für einen bewussten neuen Versuch --reset-bootstrap verwenden.',
+    );
   if (connect) {
     for (const name of ['EVOLUTION_URL', 'EVOLUTION_INSTANCE', 'EVOLUTION_API_KEY'])
       if (!process.env[name]) throw new Error(`${name} fehlt in der Prozessumgebung.`);
@@ -160,7 +167,7 @@ try {
     await sql(
       `INSERT INTO settings(key,value) VALUES('webhook_token_hash',${quote(hash(token))}),('bot_jid',${quote(botJid)}),('enabled','0') ON CONFLICT(key) DO UPDATE SET value=excluded.value;`,
     );
-    await wrangler(['secret', 'put', 'EVOLUTION_API_KEY'], process.env.EVOLUTION_API_KEY);
+    await wrangler(['secret', 'put', 'EVOLUTION_API_KEY'], `${process.env.EVOLUTION_API_KEY}\n`);
     await api(`/webhook/set/${instance}`, {
       webhook: {
         enabled: true,
@@ -227,6 +234,12 @@ try {
     console.log('Danach JA bestätigen. Den Code nicht in Gruppen oder Git ablegen.');
   }
 } catch (error) {
+  if (process.env.TT_SETUP_DIAGNOSTIC === '1') {
+    const location = error instanceof Error ? error.stack?.match(/setup\.mjs:(\d+):(\d+)/) : null;
+    console.error(
+      `Setup diagnostic: ${error instanceof Error ? error.name : 'Unknown'} at line ${location?.[1] ?? 'unknown'}`,
+    );
+  }
   // Only application-created fixed errors are shown; never output fetch request/response data.
   const known =
     error instanceof Error &&

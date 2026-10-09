@@ -310,4 +310,27 @@ describe('Evolution transport', () => {
       'https://evolution.example/group/fetchAllGroups/tt-test?getParticipants=true',
     );
   });
+  it('accepts explicit PN aliases from group metadata without interpreting LID digits as phone numbers', async () => {
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response(
+        JSON.stringify([
+          {
+            id: '120363123456@g.us',
+            subject: 'TT',
+            participants: [
+              { id: '100000001@lid', phoneNumber: '491701234567@s.whatsapp.net' },
+              { id: '100000002@lid', phoneNumber: '100000002@lid' },
+              { id: '100000003@lid', phoneNumber: '491701234568' },
+            ],
+          },
+        ]),
+      ),
+    );
+    const groups = await client(fetcher).fetchGroups();
+    expect(groups[0].participants).toEqual([
+      { id: '100000001@lid', aliases: ['491701234567@s.whatsapp.net'] },
+      { id: '100000002@lid' },
+      { id: '100000003@lid' },
+    ]);
+  });
 });

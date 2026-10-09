@@ -232,7 +232,7 @@ export class TransportError extends Error {
 export interface EvolutionGroup {
   id: string;
   subject: string;
-  participants: { id: string; admin?: 'admin' | 'superadmin' | null }[];
+  participants: { id: string; aliases?: string[]; admin?: 'admin' | 'superadmin' | null }[];
 }
 export interface EvolutionConfig {
   url: string;
@@ -361,9 +361,14 @@ export class EvolutionClient {
             const jid = normalizeJid(participant?.id);
             if (!jid || jid.endsWith('@g.us')) return [];
             const admin = participant?.admin;
+            const phone = normalizeJid(participant?.phoneNumber);
             return [
               {
                 id: jid,
+                // Current group metadata explicitly links LID and PN. Never infer a PN from LID digits.
+                ...(jid.endsWith('@lid') && phone?.endsWith('@s.whatsapp.net')
+                  ? { aliases: [phone] }
+                  : {}),
                 ...(admin === 'admin' || admin === 'superadmin' || admin === null ? { admin } : {}),
               },
             ];

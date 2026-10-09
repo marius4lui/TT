@@ -211,7 +211,7 @@ async function confirmOperation(
     }
     const members: string[] = [];
     for (const p of current.participants) {
-      const u = await resolveUser(ctx.env, p.id, [], '', ctx.now);
+      const u = await resolveUser(ctx.env, p.id, p.aliases ?? [], '', ctx.now);
       if (u) members.push(u.id);
     }
     statements.push(
