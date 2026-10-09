@@ -2,7 +2,7 @@
 
 TT organisiert Tischtennistraining über WhatsApp. Der Worker verwaltet Trainingsserien, Ausnahmen, Rückmeldungen und Nachrichten; D1 hält den Zustand dauerhaft. Eine kleine öffentliche Website stellt Trainings- und Datenschutzhinweise sowie eine freiwillige WhatsApp-Anmeldung bereit. Ein Konto ist keine Voraussetzung, um am Training teilzunehmen.
 
-Das Repository ist privat. Worker, Website, EU-D1 und Cron sind unter [tt.bz3.eu](https://tt.bz3.eu) veröffentlicht. Evolution ist angeschlossen und eine eigene Demogruppe vorbereitet. Der Trainingsbetrieb bleibt pausiert; Owner-Einrichtung, Datenschutzhinweise und die vollständige WhatsApp-Abnahme stehen noch aus. Die Website ist kein Trainer-Dashboard.
+Das Repository ist privat. Worker, Website, EU-D1 und Cron sind unter [tt.bz3.eu](https://tt.bz3.eu) veröffentlicht. Evolution ist angeschlossen; der Owner hat die eigene Demogruppe und einen Hinweis für den privaten Funktionstest bestätigt. Der Trainingsbetrieb ist noch pausiert, die vollständige WhatsApp-Abnahme steht aus. Die Website ist kein Trainer-Dashboard.
 
 ## Stack
 

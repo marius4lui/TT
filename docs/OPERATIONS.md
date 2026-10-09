@@ -1,6 +1,6 @@
 # Betrieb
 
-Worker, Website, EU-D1 und Minuten-Cron sind seit 8. Oktober 2026 auf `tt.bz3.eu` veröffentlicht. Seit 9. Oktober ist die echte Evolution-Instanz mit Secret und authentifiziertem Webhook verbunden. Eine eigene Demogruppe ist angelegt; automatischer Trainingsbetrieb und Registrierung bleiben gesperrt, bis Owner-Einrichtung und Datenschutzhinweise abgeschlossen sind. Vor Freigabe die Schritte aus [ACCEPTANCE.md](ACCEPTANCE.md) durchführen.
+Worker, Website, EU-D1 und Minuten-Cron sind seit 8. Oktober 2026 auf `tt.bz3.eu` veröffentlicht. Seit 9. Oktober ist die echte Evolution-Instanz mit Secret und authentifiziertem Webhook verbunden. Der Nutzer hat Owner-Einrichtung, Auswahl der eigenen Demogruppe und den Hinweis für den privaten Funktionstest über WhatsApp bestätigt. Web-Login ist freigeschaltet; automatische Trainingsnachrichten bleiben bis zur bestätigten Aktivierung pausiert. Vor regulärem Einsatz die Schritte aus [ACCEPTANCE.md](ACCEPTANCE.md) durchführen.
 
 ## Voraussetzungen und Konfiguration
 

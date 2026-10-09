@@ -61,9 +61,16 @@ HTTP getestet; das ersetzt die spätere Geräteabnahme nicht.
   Remote-Ziel ein Import und liefert keine SELECT-/RETURNING-Ergebniszeilen.
 - 159 Vitest-Tests, sieben zusätzliche Operator-Tests, Windows-DPAPI-Test,
   Typecheck, Worker-Build, Formatierung und lokaler workerd-Smoketest erfolgreich.
-- Echte Owner-Bestätigung, Gruppenauswahl, Registrierung, Reaktionen und Login
-  stehen noch aus. Dafür muss der Nutzer vom zweiten WhatsApp-Konto handeln;
-  keine Identitätsnachweise wurden simuliert. Automatik bleibt pausiert.
+- Echte Owner-Bestätigung vom zweiten Konto eingegangen: Bootstrap abgeschlossen,
+  genau eine Owner-Rolle. Demogruppe und privater Testhinweis anschließend vom
+  Owner über echte WhatsApp-Befehle bestätigt. 15 Antworten erfolgreich gesendet,
+  kein fehlgeschlagener oder unklarer Versand in der Worker-Outbox.
+- Öffentliches HTTPS geprüft: Cross-Origin-Loginstart 403; zulässiger Loginstart
+  200 mit Secure/HttpOnly/SameSite-Cookie; Challenge zunächst pending; Abschluss
+  ohne WhatsApp-Bestätigung 401; anonymer Kontozugriff und falscher Webhook-Token 401.
+  Dabei wurde keine WhatsApp-Identität simuliert.
+- Live-Registrierung, Trainingsreaktionen und erfolgreicher Web-Login stehen noch
+  aus. Automatik bleibt bis zum Trainerbefehl pausiert; noch kein Testtraining angelegt.
 
 Die lokale Testnummer, Gruppenkennung und das Demo-Journal liegen nur im
 geschützten Windows-Profil. Telefonnummern, API-Key und Einrichtungscode werden
