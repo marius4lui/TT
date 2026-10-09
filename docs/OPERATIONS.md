@@ -60,6 +60,23 @@ node scripts/setup.mjs --remote --connect
 
 Das Setup-Skript sendet keine WhatsApp-Nachrichten, aktiviert keine Trainingsautomatik und deployed keinen Worker. `EVOLUTION_URL` und `EVOLUTION_INSTANCE` müssen zum selben Ziel in `wrangler.jsonc` passen. Alle Flags stehen unter `node scripts/setup.mjs --help`. Bei pnpm ausdrücklich `pnpm run setup …` verwenden; `pnpm setup` kollidiert mit der pnpm-eigenen Abkürzung.
 
+## Rückmeldungen und Korrekturen ohne KI
+
+Die Spracherkennung läuft ausschließlich mit lokalen, begrenzten Regeln im Worker; es gibt keinen KI-Dienst und keine neue Speicherung von Gesprächsverläufen. Klare Selbstaussagen ersetzen die eigene Rückmeldung zum passenden Training, auch nach einer vorherigen Absage.
+
+| Beispiel                                            | Wirkung                                                                            |
+| --------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| „Ich komme heute mal net“                           | Absage                                                                             |
+| „Bzw ich komme doch aber ich bin 5 Minuten zu spät“ | Zusage, fünf Minuten verspätet                                                     |
+| „Ich komme 10 min später, Korrektur: 5 min später“  | Fünf Minuten verspätet                                                             |
+| „Korrektur: doch pünktlich“                         | Zusage, Verspätung und alte Ankunftszeit entfernt                                  |
+| „Bzw komme doch nicht“                              | Absage, Verspätung entfernt                                                        |
+| „Ich komme, aber erst gegen 18:20“                  | Ankunftszeit am ausgewählten Termin; Verspätung wird gegen dessen Beginn berechnet |
+
+„Bzw.“, „beziehungsweise“, „aber“, „allerdings“, „doch“ und kurze Selbstkorrekturen werden als zusammenhängende Satzteile ausgewertet. Zahlen, ausgeschriebene Minuten, halbe und Viertelstunden sind möglich. Zeitspannen wie „5–10 Minuten“ werden als Verspätung ohne erfundene genaue Minutenangabe erfasst. „In fünf Minuten“ ist keine Angabe von fünf Minuten Verspätung. Ein isoliertes „Ja“, „Nein“, „Doch“ oder „5 Minuten“ verändert nichts.
+
+Bei mehreren passenden Terminen fragt der Bot nach dem Termin. Unsichere oder widersprüchliche Selbstaussagen lösen eine kurze Klärung aus und ändern nichts. Zitate, fremde Personen und nicht unterstützte Datumsangaben werden nicht als Zusage verwendet. Die Regeln sind bewusst begrenzt und verstehen nicht jede beliebige Formulierung. Neue Beispiele als positive **und** negative Regressionstests in `packages/core/tests/language-corrections.test.ts` ergänzen; Zustandswechsel zusätzlich in `tests/bot.test.ts` prüfen.
+
 ## Ausfälle und Wiederanlauf
 
 Einladungen, Änderungen und persönliche Übersichten liegen dauerhaft in D1. Versand prüft Terminversion, Gruppenzustand und gegebenenfalls aktuelle Rolle und Zustimmung. Begrenzte Wiederholungen sind nur bei eindeutig wiederholbaren Fehlern erlaubt. Bei Timeout nach möglicher Annahme oder unterbrochenem Sender bleibt der Auftrag `uncertain`; nicht blind erneut senden, da die Nachricht schon in WhatsApp stehen könnte.

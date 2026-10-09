@@ -500,6 +500,96 @@ describe('participation and private/group provenance', () => {
 });
 
 describe('natural language and quiet web handoff', () => {
+  it('applies the real absence → correction → late → punctual → absence conversation once per message', async () => {
+    const inGroup = { isGroup: true, chatJid: group };
+    await send(member, 'Ich komme heute mal net', inGroup);
+    expect(await attendance()).toMatchObject({ response: 'no', minutes: null });
+    const correction = await send(
+      member,
+      'Bzw ich komme doch aber ich bin 5 Minuten zu spät',
+      inGroup,
+    );
+    expect(await attendance()).toMatchObject({ response: 'yes', punctuality: 'late', minutes: 5 });
+    const acknowledgment = await db
+      .prepare('SELECT text FROM outbox_jobs WHERE dedupe_key=?')
+      .bind(`attendance:${correction.id}`)
+      .first<string>('text');
+    expect(acknowledgment).toContain('5 Minuten später');
+    expect(acknowledgment).not.toMatch(/https?:|\/login|\(training\)/);
+    // Redelivery of the same provider event cannot repeat the confirmation.
+    await processMessage(env, correction, clock);
+    expect(await db.prepare('SELECT COUNT(*) AS n FROM outbox_jobs').first('n')).toBe(2);
+    await send(member, 'Korrektur: doch pünktlich', inGroup);
+    expect(await attendance()).toMatchObject({
+      response: 'yes',
+      punctuality: 'punctual',
+      minutes: null,
+      arrival_time: null,
+    });
+    await send(member, 'Bzw ich komme doch nicht', inGroup);
+    expect(await attendance()).toMatchObject({ response: 'no', minutes: null });
+    await send(member, 'Ich komme doch pünktlich', inGroup);
+    expect(await attendance()).toMatchObject({ response: 'yes', punctuality: 'punctual' });
+    expect(await db.prepare('SELECT COUNT(*) AS n FROM outbox_jobs').first('n')).toBe(5);
+  });
+  it('does not overwrite a newer correction with a delayed older statement or an ambiguous sentence', async () => {
+    const earlier = clock;
+    await send(member, 'Ich komme heute nicht');
+    await send(member, 'Bzw komme doch, aber fünf Minuten später');
+    const corrected = await attendance();
+    await send(member, 'Ich komme nicht', { timestamp: earlier });
+    expect(await attendance()).toEqual(corrected);
+    const question = await send(member, 'Bzw komme doch, aber vielleicht fünf Minuten später');
+    expect(await replyFor(question)).toContain('Noch wurde nichts geändert');
+    expect(await attendance()).toEqual(corrected);
+    await send(member, 'Paul sagt „Ich komme doch“');
+    expect(await attendance()).toEqual(corrected);
+  });
+  it('clears stale arrival clocks when replacing them with minutes and clears lateness for an on-time arrival', async () => {
+    await send(member, 'Ich komme erst um 18:20');
+    expect(await attendance()).toMatchObject({ arrival_time: '18:20', minutes: 20 });
+    await send(member, 'Korrektur: nur fünf Minuten später');
+    expect(await attendance()).toMatchObject({
+      response: 'yes',
+      punctuality: 'late',
+      arrival_time: null,
+      minutes: 5,
+    });
+    await send(member, 'Ich komme erst um 17:50');
+    expect(await attendance()).toMatchObject({
+      response: 'yes',
+      punctuality: 'punctual',
+      arrival_time: null,
+      minutes: null,
+    });
+  });
+  it('asks for the training before applying a correction and resolves its clock against the selected start', async () => {
+    await db
+      .prepare(
+        "INSERT INTO training_sessions(id,group_jid,local_date,start_at,end_at,timezone,location,invite_at,late_at,created_at) SELECT 'second',group_jid,local_date,start_at+3600000,end_at+3600000,timezone,location,invite_at,late_at,created_at FROM training_sessions WHERE id='training'",
+      )
+      .run();
+    const prompt = await send(member, 'Bzw ich komme doch, aber erst um 18:20');
+    expect(await attendance()).toBeNull();
+    expect(await replyFor(prompt)).toContain('Welches Training');
+    await send(member, '1');
+    expect(await attendance()).toMatchObject({
+      response: 'yes',
+      punctuality: 'late',
+      minutes: 20,
+      arrival_time: '18:20',
+    });
+    await send(member, 'Bzw ich komme doch, aber erst um 18:20');
+    await send(member, '2');
+    expect(
+      await db
+        .prepare(
+          "SELECT response,punctuality,minutes,arrival_time FROM attendance WHERE session_id='second' AND user_id=?",
+        )
+        .bind(member.id)
+        .first(),
+    ).toEqual({ response: 'yes', punctuality: 'punctual', minutes: null, arrival_time: null });
+  });
   it('issues only one private login link without a contact card or participant dialogue', async () => {
     const event = await send(owner, 'Ich möchte mich anmelden');
     expect(await replyFor(event)).toContain('/login#');
@@ -557,7 +647,7 @@ describe('natural language and quiet web handoff', () => {
     expect(await replyFor(stale)).toContain('geändert');
     expect(await attendance()).toBeNull();
     await send(member, 'Ich komme erst um 17:50');
-    expect(await attendance()).toMatchObject({ response: 'yes', punctuality: 'unknown' });
+    expect(await attendance()).toMatchObject({ response: 'yes', punctuality: 'punctual' });
     await send(member, 'Ich komme erst um 18:10');
     expect(await attendance()).toMatchObject({ response: 'yes', punctuality: 'late', minutes: 10 });
   });

@@ -380,6 +380,37 @@ INSERT INTO bootstrap(id,state,code_hash,expires_at) VALUES(1,'pending',${quote(
   });
   progress('actual local cron invocation and group reaction accepted without chat spam');
 
+  stage = 'natural absence and compound correction';
+  let correctionOffset = sent.length;
+  await webhook(memberJid, 'Ich komme morgen mal net', { group: true });
+  await waitSent(
+    correctionOffset,
+    (message) => message.number === groupJid && message.text?.includes('Absage'),
+  );
+  correctionOffset = sent.length;
+  await webhook(memberJid, 'Bzw ich komme doch aber ich bin 5 Minuten zu spät', { group: true });
+  const correctionReply = await waitSent(
+    correctionOffset,
+    (message) => message.number === groupJid && message.text?.includes('5 Minuten später'),
+  );
+  check(!correctionReply.text.includes('https://'), 'correction_link_spam');
+  const correctionState = await sql(
+    `SELECT response,punctuality,minutes FROM attendance a JOIN users u ON u.id=a.user_id WHERE u.jid=${quote(memberJid)};`,
+  );
+  check(
+    correctionState[0]?.results?.[0]?.response === 'yes' &&
+      correctionState[0].results[0].punctuality === 'late' &&
+      correctionState[0].results[0].minutes === 5,
+    'compound_correction_state_failed',
+  );
+  check(
+    sent.slice(correctionOffset).filter((message) => message.text).length === 1,
+    'compound_correction_spam',
+  );
+  progress(
+    'absence replaced by attendance with five minutes lateness and one concise acknowledgment',
+  );
+
   stage = 'one-message magic login, web registration and optional reminders';
   const api = (path, method, data, session = '') =>
     local(path, {

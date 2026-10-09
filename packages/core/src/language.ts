@@ -17,6 +17,8 @@ export function normalizeLanguage(input: string): string {
     .replace(/\b(?:bischen|bissl|bisl|bissel|bisschen)\b/g, 'etwas')
     .replace(/\b(?:kom|komm|kome|kommm?e)\b/g, 'komme')
     .replace(/\b(?:schaff|schaf)\b/g, 'schaffe')
+    .replace(/\bverspaet\b/g, 'verspaete')
+    .replace(/\b(?:hab|habs)\b/g, 'habe')
     .replace(/\b(?:binne|binn)\b/g, 'bin')
     .replace(/\s+/g, ' ')
     .trim();
@@ -30,10 +32,197 @@ export type AttendanceIntent = {
   reference?: string;
 };
 export function attendanceIntent(input: string): AttendanceIntent {
+  return parseAttendance(input, true);
+}
+
+// These are discourse markers, never a response on their own. In particular,
+// bare "ja", "nein" and "doch" must not answer an unrelated group conversation.
+function stripCorrection(text: string): string {
+  return text.replace(
+    /^(?:(?:bzw\.?|beziehungsweise|korrektur|plan(?:aenderung|wechsel)|ach\s+so|achso|ach|also|moment|halt|nee|nein|sorry|sry|doch|hi|hallo|hey|moin)\b[\s,.!:–-]*)+/,
+    '',
+  );
+}
+
+function shortReport(text: string, elliptical = false): string {
+  const value = stripCorrection(text).replace(/^(?:nur|allerdings|leider)\s+/, '');
+  if (
+    /^(?:ich\s+)?(?:bin\s+(?:(?:heute|morgen|doch|wieder)\s+)*(?:am start|mit von der partie)|schaffe\s+(?:es|das)\s+(?:(?:heute|morgen)\s+)?doch)[.!]*$/.test(
+      value,
+    )
+  )
+    return `ich komme${/\bmorgen\b/.test(value) ? ' morgen' : /\bheute\b/.test(value) ? ' heute' : ''}`;
+  if (
+    /^(?:bei mir\s+)?wird\s+(?:es\s+)?(?:(?:heute|morgen|doch|leider)\s+)*(?:nichts|nix)[.!]*$/.test(
+      value,
+    )
+  )
+    return `ich komme${/\bmorgen\b/.test(value) ? ' morgen' : /\bheute\b/.test(value) ? ' heute' : ''} nicht`;
+  if (/^(?:(?:heute|morgen)\s+)?(?:doch\s+|wieder\s+)?(?:mit\s+)?dabei[.!]*$/.test(value))
+    return `ich bin ${value}`;
+  if (
+    (elliptical || value !== text) &&
+    /^(?:doch\s+)?(?:nicht|gar nicht|nicht mehr|nicht dabei)[.!]*$/.test(value)
+  )
+    return `ich komme ${value.replace(/ dabei/, '')}`;
+  if (elliptical && /^(?:etwas\s+)?(?:zu\s+)?spaet(?:er)?[.!]*$/.test(value))
+    return `ich komme ${value}`;
+  if (
+    elliptical &&
+    /^(?:erst\s+(?:gegen\s+|um\s+)?|gegen\s+)(?:[01]?\d|2[0-3])[:.][0-5]\d[.!]*$/.test(value)
+  )
+    return `ich komme ${value}`;
+  // Subject omission is common in follow-ups. Restrict it to complete timing
+  // reports; "5 Minuten" or "später" alone could answer any other question.
+  if (
+    /^(?:(?:heute|morgen|doch|wieder|etwas|ca\.?|ungefaehr)\s+)*(?:(?:[+-]?\d+(?:[.,-]\d+)?|[a-z]+)(?:\s+(?:bis|oder)\s+(?:\d+|[a-z]+))?\s*(?:min(?:uten?|s)?\.?|stunden?)\s+(?:zu\s+)?spaet(?:er)?|(?:eine?\s+)?(?:halbe|viertel|dreiviertel)\s*stunde\s+spaeter|(?:nicht mehr zu spaet|puenktlich))(?:\s+da)?[.!]*$/.test(
+      value,
+    )
+  )
+    return `ich bin ${value}`;
+  return value;
+}
+
+type Clause = { text: string; correction: boolean; contrast: boolean };
+function composedAttendance(text: string): AttendanceIntent | undefined {
+  // Split only discourse boundaries, not dates, decimal values or time ranges.
+  // At most eight clauses, no recursive composition and no conversation text
+  // storage. The existing identity/session selection remains the authority.
+  const boundary =
+    /\s*\b(bzw\.?|beziehungsweise|korrektur|nee|nein|moment|aber|jedoch|allerdings|sondern|und)\b[\s,:.]*|[;,!.]\s*(?=(?:ich|komme|bin|werde|schaffe|kann|muss|doch|ach|bzw|korrektur|nee|moment)\b)/g;
+  const clauses: Clause[] = [];
+  let start = 0;
+  let correction = false;
+  let contrast = false;
+  for (const match of text.matchAll(boundary)) {
+    const part = text.slice(start, match.index).trim();
+    if (part) clauses.push({ text: part, correction, contrast });
+    correction = /^(?:bzw\.?|beziehungsweise|korrektur|nee|nein|moment)$/.test(match[1] ?? '');
+    contrast = /^(?:aber|jedoch|allerdings)$/.test(match[1] ?? '');
+    // "sondern" can negate an object, not the attendance. Leave its existing
+    // conservative handling intact instead of discarding the negated object.
+    if (match[1] === 'sondern') return undefined;
+    start = match.index! + match[0].length;
+  }
+  if (!clauses.length) return undefined;
+  clauses.push({ text: text.slice(start).trim(), correction, contrast });
+  if (clauses.length > 8) return { kind: 'uncertain' };
+  let combined: AttendanceIntent | undefined;
+  let pendingCorrection = false;
+  for (const clause of clauses) {
+    const clean = shortReport(clause.text.replace(/[,;.!]+$/, ''), !!combined);
+    if (!clean && /^(?:ach\b|doch\b|nee\b|moment\b)/.test(clause.text)) {
+      pendingCorrection = true;
+      continue;
+    }
+    const intent = parseAttendance(clean, false);
+    if (intent.kind === 'uncertain') return intent;
+    if (intent.kind === 'none') return { kind: 'none' };
+    // A preceding work obligation explains lateness; it isn't an explicit
+    // withdrawal when followed by an actual arrival statement.
+    if (!combined && /^(?:ich\s+)?muss\s+(?:heute\s+|morgen\s+)?arbeiten[.!]*$/.test(clean))
+      continue;
+    const corrected =
+      pendingCorrection ||
+      clause.correction ||
+      /^(?:ach\b|korrektur\b|moment\b|nee\b|bzw\b)/.test(clause.text) ||
+      /\bdoch\b/.test(clause.text);
+    pendingCorrection = false;
+    if (!combined || corrected || (clause.contrast && intent.kind !== 'yes')) {
+      // "komme, aber fünf Minuten später" refines rather than contradicts.
+      combined = intent;
+      continue;
+    }
+    if (combined.kind === intent.kind) {
+      if (
+        combined.kind === 'late' &&
+        ((combined.minutes !== undefined &&
+          intent.minutes !== undefined &&
+          combined.minutes !== intent.minutes) ||
+          (combined.arrivalTime &&
+            intent.arrivalTime &&
+            combined.arrivalTime !== intent.arrivalTime))
+      )
+        return { kind: 'uncertain' };
+      combined = { ...combined, ...intent };
+    } else if (combined.kind === 'yes' && ['late', 'punctual'].includes(intent.kind)) {
+      combined = intent;
+    } else if (intent.kind === 'yes' && ['late', 'punctual'].includes(combined.kind)) {
+      // An additional attendance confirmation doesn't retract lateness.
+    } else {
+      return { kind: 'uncertain' };
+    }
+  }
+  return pendingCorrection ? { kind: 'uncertain' } : combined;
+}
+
+const minuteWords: Record<string, number> = {
+  eine: 1,
+  einer: 1,
+  eins: 1,
+  ein: 1,
+  zwei: 2,
+  drei: 3,
+  vier: 4,
+  fuenf: 5,
+  sechs: 6,
+  sieben: 7,
+  acht: 8,
+  neun: 9,
+  zehn: 10,
+  elf: 11,
+  zwoelf: 12,
+  dreizehn: 13,
+  vierzehn: 14,
+  fuenfzehn: 15,
+  sechzehn: 16,
+  siebzehn: 17,
+  achtzehn: 18,
+  neunzehn: 19,
+  zwanzig: 20,
+  dreissig: 30,
+  vierzig: 40,
+  fuenfzig: 50,
+  sechzig: 60,
+};
+for (const tens of ['zwanzig', 'dreissig', 'vierzig', 'fuenfzig'])
+  for (const ones of ['ein', 'zwei', 'drei', 'vier', 'fuenf', 'sechs', 'sieben', 'acht', 'neun'])
+    minuteWords[`${ones}und${tens}`] = minuteWords[ones] + minuteWords[tens];
+
+function delayMinutes(text: string): number | undefined {
+  // A range is useful as a lateness report, but not as one exact ETA. Likewise
+  // "in 5 Minuten" measures from now, not from the start of training.
+  if (
+    /\d\s*(?:[-–,.]|bis|oder)\s*\d|(?:^|\s)[+-]\d|\b(?:bis|oder)\b|\bin\s+(?:(?:ca\.?|ungefaehr)\s+)?(?:\d|[a-z]+\s+(?:min|stunde))/.test(
+      text,
+    )
+  )
+    return undefined;
+  const values: number[] = [];
+  for (const match of text.matchAll(
+    /\b(\d{1,3}|[a-z]+)\s*(min(?:uten|ute|s)?\.?|m|stunden?|std\.?)\b/g,
+  )) {
+    const amount = /^\d+$/.test(match[1]) ? Number(match[1]) : minuteWords[match[1]];
+    if (amount !== undefined) values.push(amount * (/^(?:stunde|std)/.test(match[2]) ? 60 : 1));
+  }
+  if (/\b(?:eine?\s+)?viertelstunde\b/.test(text)) values.push(15);
+  if (/\b(?:eine?\s+)?dreiviertelstunde\b/.test(text)) values.push(45);
+  if (/\bhalbe[n]?\s+stunde\b/.test(text)) values.push(30);
+  // Multiple quantities require a correction clause, handled by the composer.
+  const unique = [...new Set(values)];
+  return unique.length === 1 && unique[0] > 0 && unique[0] <= 240 ? unique[0] : undefined;
+}
+
+function parseAttendance(input: string, compose: boolean): AttendanceIntent {
   const normalized = normalizeLanguage(input);
   const reference = /\(([a-zA-Z0-9_-]{1,64})\)\.?$/.exec(input.normalize('NFKC').trim())?.[1];
-  const text = normalized.replace(/\([a-zA-Z0-9_-]{1,64}\)\.?$/, '').trim();
-  const day = /\bmorgen\b/.test(text) ? 'tomorrow' : /\bheute\b/.test(text) ? 'today' : undefined;
+  const original = normalized.replace(/\([a-zA-Z0-9_-]{1,64}\)\.?$/, '').trim();
+  const text = shortReport(original);
+  const day = /\bmorgen\b/.test(original)
+    ? 'tomorrow'
+    : /\bheute\b/.test(original)
+      ? 'today'
+      : undefined;
   const result = (
     kind: AttendanceIntent['kind'],
     extras: Partial<AttendanceIntent> = {},
@@ -43,7 +232,7 @@ export function attendanceIntent(input: string): AttendanceIntent {
     ...(reference ? { reference } : {}),
     ...extras,
   });
-  if (!text || text.length > 600) return { kind: 'none' };
+  if (!text || original.length > 600) return { kind: 'none' };
   // Only today/tomorrow are supported by the caller. Never silently resolve a
   // named weekday, calendar date or relative week to its next training window.
   if (
@@ -52,7 +241,7 @@ export function attendanceIntent(input: string): AttendanceIntent {
     )
   )
     return { kind: 'none' };
-  if (/\bheute\b/.test(text) && /\bmorgen\b/.test(text)) return result('uncertain');
+  if (/\bheute\b/.test(original) && /\bmorgen\b/.test(original)) return result('uncertain');
   if (/\b(?:aufgestanden|aufgewacht|gegessen|geschlafen|angekommen|gekommen)\b/.test(text))
     return { kind: 'none' };
   // Reports about yesterday, quotes, hypothetical conditions and questions cannot mutate attendance.
@@ -96,6 +285,10 @@ export function attendanceIntent(input: string): AttendanceIntent {
       text.includes('?'))
   )
     return result('uncertain');
+  if (compose) {
+    const composed = composedAttendance(text);
+    if (composed) return result(composed.kind, composed);
+  }
   if (!self && !explicit) return { kind: 'none' };
   if (
     /\b(?:melde\s+mich|schreibe|antworte|rufe)\b/.test(text) &&
@@ -114,6 +307,12 @@ export function attendanceIntent(input: string): AttendanceIntent {
     return { kind: 'none' };
   const negative =
     /\b(?:nicht|kein[en]?|ohne|abgesagt|absagen|abmelden|fehle|verhindert|krank)\b/.test(text);
+  if (
+    /\bnicht\s+(?:(?:ca\.?|ungefaehr)\s+)?(?:\d+|[a-z]+)\s*(?:min(?:uten?|s)?|stunden?)\b|\bnicht\s+nicht\b/.test(
+      text,
+    )
+  )
+    return result('uncertain');
   if (
     /\b(?:nicht|keine[ns]?)\b.{0,35}\b(?:absagen|abmelden|abgesagt|ausfallen)\b|\b(?:sage|melde)\b.{0,35}\bnicht\b.{0,20}\bab\b|\b(?:nicht\s+frueher|nicht\s+mit\s+dem|nicht\s+mit\s+der|nicht\s+unpuenktlich|nicht\s+ohne)\b|\bkann\b.{0,20}\bnicht\s+(?:zu\s+)?spaeter\b/.test(
       text,
@@ -173,7 +372,10 @@ export function attendanceIntent(input: string): AttendanceIntent {
     return result('no');
   if (/\bpuenktlich\b/.test(text) && !negative) return result('punctual');
   const clock = /\b(?:erst|gegen)\s+(?:um\s+)?([01]?\d|2[0-3])[:.]([0-5]\d)\b/.exec(text);
-  const delayed = /\b(?:spaet(?:er)?|verspaet\w*)\b/.test(text) || notOnTime;
+  const delayed =
+    /\b(?:spaet(?:er)?|verspaet\w*)\b|\bnach\s+(?:trainingsbeginn|trainingsstart|beginn)\b/.test(
+      text,
+    ) || notOnTime;
   const transit =
     /\b(?:stecke|stehe|haenge|bin)\b.*\b(?:im\s+stau|stau)\b|\b(?:verpasse|verpasst)\b.*\bbus\b|\b(?:bus|zug|bahn)\b.*\bverspaetung\b/.test(
       text,
@@ -187,36 +389,7 @@ export function attendanceIntent(input: string): AttendanceIntent {
     )
       return { kind: 'none' };
     if (negative && !notOnTime) return result('uncertain');
-    const numeric = /\b(\d{1,3})\s*(?:min(?:uten|s)?\.?|m)\b/.exec(text);
-    const words: Record<string, number> = {
-      fuenf: 5,
-      zehn: 10,
-      fuenfzehn: 15,
-      zwanzig: 20,
-      fuenfundzwanzig: 25,
-      dreissig: 30,
-      vierzig: 40,
-      fuenfundvierzig: 45,
-      sechzig: 60,
-    };
-    const word =
-      /\b(fuenf|zehn|fuenfzehn|zwanzig|fuenfundzwanzig|dreissig|vierzig|fuenfundvierzig|sechzig)\s+minuten?\b/.exec(
-        text,
-      );
-    const minutes =
-      /\d\s*(?:[-–,.]|bis|oder)\s*\d|(?:^|\s)[+-]\d|\b(?:fuenf|zehn|fuenfzehn|zwanzig|dreissig)\s+(?:bis|oder)\b/.test(
-        text,
-      )
-        ? undefined
-        : numeric
-          ? Number(numeric[1])
-          : word
-            ? words[word[1]]
-            : /\bviertel(?:stunde)?\b/.test(text)
-              ? 15
-              : /\bhalbe[n]?\s+stunde\b/.test(text)
-                ? 30
-                : undefined;
+    const minutes = delayMinutes(text);
     return result('late', {
       ...(minutes && minutes <= 240 ? { minutes } : {}),
       ...(clock ? { arrivalTime: `${clock[1].padStart(2, '0')}:${clock[2]}` } : {}),
@@ -240,7 +413,7 @@ export function attendanceIntent(input: string): AttendanceIntent {
     /\b(?:bin|ich\s+bin)\s+(?:(?:heute|morgen|wieder|doch|auch|gerne|gern)\s+)*dabei\b/.test(
       text,
     ) ||
-    /^(?:(?:hi|hallo|hey|moin|also|ok|okay|doch|ja)[,! ]+)*(?:ich\s+)?komme(?:\s+(?:heute|morgen|auch|doch|wieder|gerne|gern|mit|zum\s+training|ins\s+training|zum\s+tt|in\s+die\s+halle))*[.! ]*$/.test(
+    /^(?:(?:hi|hallo|hey|moin|also|ok|okay|doch|ja)[,! ]+)*(?:ich\s+)?komme(?:\s+(?:heute|morgen|auch|doch|wieder|gerne|gern|mal|nun|jetzt|trotzdem|definitiv|mit|zum\s+training|ins\s+training|zum\s+tt|in\s+die\s+halle))*[.! ]*$/.test(
       text,
     )
   )

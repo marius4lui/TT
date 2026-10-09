@@ -127,3 +127,10 @@ Die neue Einladung und Anmeldung wurden im lokalen Browser mit Testprovider erfo
 - Persönliche Hinweise berücksichtigen aktuelle Absagen und bereits bekannte Verspätungen; nach Verschiebung veraltete Antworten unterdrücken keine neue Abfrage. Verspätete Abfragen werden nur bis fünf Minuten nach Beginn nachgeholt.
 - 446 Vitest-Tests, sieben Operator-Tests, Typecheck und Build erfolgreich. Der laufende lokale Worker mit D1 und HTTP-Testprovider sendete genau eine kombinierte Gruppenabfrage plus eine native Uhr-Reaktion. Formatprüfung erfolgreich.
 - Live-Nachprüfung: Worker-Version `4fac12a3-693c-492b-9d02-4bf844103c66`, Health HTTP 200. Die bestehende aktuelle Gruppen-Verspätungsabfrage erhielt genau einen erfolgreichen Clock-Auftrag (ein Versuch, Provider-ID bestätigt). Kein erneuter Trainingstext wurde dafür versendet.
+
+## Natürliche Korrekturen ohne KI
+
+- Der gemeldete Satz „Bzw ich komme doch aber ich bin 5 Minuten zu spät“ ist ein Regressionstest. Satzteilregeln ergänzen die Einzelmuster um Selbstkorrekturen, Zusage mit Verspätung, kurze Folgeaussagen und weitere Zahlenwörter. Gegenbeispiele prüfen Zitate, andere Personen, Bedingungen, doppelte Verneinung, widersprüchliche Zeitangaben und fremde Termine.
+- Bot-Integration prüft Absage → verspätete Zusage → pünktliche Zusage → Absage sowie doppelte und verspätet zugestellte ältere Ereignisse. Neue Minutenangaben entfernen veraltete Ankunftsuhrzeiten; pünktliche Selbstaussagen korrigieren auch vorherige Absagen. Die Berechnung absoluter Ankunftszeiten wird nach einer Terminauswahl genauso angewendet wie bei einem einzigen Termin.
+- 555 Vitest-Tests, sieben Operator-Tests, Typecheck, Formatprüfung und Worker-Build erfolgreich. Der lokale workerd/D1-Smoketest mit HTTP-Testprovider ersetzt die Absage durch Zusage und fünf Minuten Verspätung und liefert genau eine kurze Bestätigung ohne Link.
+- Worker-Version `e9c4c841-f4c5-4b82-9d7b-68a2bae600db` auf `tt.bz3.eu` veröffentlicht. Keine Migration, kein KI-Dienst und keine Wiederholung alter Benutzerereignisse. Die erneute reale Handy-Eingabe nach diesem Deploy ist noch nicht geprüft.

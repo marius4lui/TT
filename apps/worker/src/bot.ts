@@ -858,6 +858,19 @@ function stateFromRow(row: AttendanceRow): AttendanceState {
     lateStamp: row.late_source ? JSON.parse(row.late_source) : undefined,
   };
 }
+function resolveArrival(intent: AttendanceIntent, training: Training): AttendanceIntent {
+  if (!intent.arrivalTime) return intent;
+  const arrival = localTimestamp(
+    dateInZone(training.start_at, training.timezone),
+    intent.arrivalTime,
+    training.timezone,
+  );
+  if (arrival <= training.start_at)
+    return { ...intent, kind: 'punctual', minutes: undefined, arrivalTime: undefined };
+  const minutes = Math.ceil((arrival - training.start_at) / 60000);
+  return { ...intent, minutes: minutes <= 240 ? minutes : undefined };
+}
+
 export async function recordAttendance(
   ctx: BotContext,
   t: Training,
@@ -904,7 +917,12 @@ export async function recordAttendance(
         after.attendance,
         after.late ? 'late' : lateStamp ? 'punctual' : 'unknown',
         after.minutes ?? null,
-        after.late ? (arrival ?? row.arrival_time) : null,
+        after.late
+          ? (arrival ??
+              (JSON.stringify(after.lateStamp) === JSON.stringify(before.lateStamp)
+                ? row.arrival_time
+                : null))
+          : null,
         stamp ? JSON.stringify(stamp) : null,
         stamp?.timestamp ?? 0,
         lateStamp ? JSON.stringify(lateStamp) : null,
@@ -1148,7 +1166,8 @@ export async function processMessage(
       );
       return;
     }
-    if (t)
+    if (t) {
+      const selectedIntent = resolveArrival(data.intent, t);
       await recordAttendance(
         ctx,
         t,
@@ -1157,21 +1176,22 @@ export async function processMessage(
           timestamp: event.timestamp,
           source: 'private',
           attendance:
-            data.intent.kind === 'no'
+            selectedIntent.kind === 'no'
               ? 'no'
-              : ['yes', 'late'].includes(data.intent.kind)
+              : ['yes', 'late', 'punctual'].includes(selectedIntent.kind)
                 ? 'yes'
                 : undefined,
           late:
-            data.intent.kind === 'late'
+            selectedIntent.kind === 'late'
               ? true
-              : data.intent.kind === 'punctual'
+              : selectedIntent.kind === 'punctual'
                 ? false
                 : undefined,
-          minutes: data.intent.minutes,
+          minutes: selectedIntent.minutes,
         },
-        data.intent.arrivalTime,
+        selectedIntent.arrivalTime,
       );
+    }
     await env.DB.prepare("DELETE FROM conversations WHERE user_id=? AND kind='language:choice'")
       .bind(user.id)
       .run();
@@ -1345,20 +1365,7 @@ export async function processMessage(
     }
     return;
   }
-  if (intent.arrivalTime) {
-    const arrival = localTimestamp(
-      dateInZone(mine[0].start_at, mine[0].timezone),
-      intent.arrivalTime,
-      mine[0].timezone,
-    );
-    if (arrival <= mine[0].start_at) {
-      intent.kind = 'yes';
-      intent.arrivalTime = undefined;
-    } else {
-      const minutes = Math.ceil((arrival - mine[0].start_at) / 60000);
-      if (minutes <= 240) intent.minutes = minutes;
-    }
-  }
+  Object.assign(intent, resolveArrival(intent, mine[0]));
   await recordAttendance(
     ctx,
     mine[0],
@@ -1367,7 +1374,11 @@ export async function processMessage(
       timestamp: event.timestamp,
       source: 'private',
       attendance:
-        intent.kind === 'no' ? 'no' : ['yes', 'late'].includes(intent.kind) ? 'yes' : undefined,
+        intent.kind === 'no'
+          ? 'no'
+          : ['yes', 'late', 'punctual'].includes(intent.kind)
+            ? 'yes'
+            : undefined,
       late: intent.kind === 'late' ? true : intent.kind === 'punctual' ? false : undefined,
       minutes: intent.minutes,
     },
