@@ -189,7 +189,7 @@ async function commitApproval(
   const botName = display(await setting(env.DB, 'bot_name', 'TT Bot'), 'TT Bot');
   const trainerName = display(trainer.user.display_name, 'Trainerteam');
   const origin = await setting(env.DB, 'origin', 'https://tt.bz3.eu');
-  const welcome = `🏓 *Willkommen bei TT*\n\n*${botName}* übernimmt ab jetzt die Trainingsabfragen für *${trainerName}*.\n\n*So meldest du dich zurück*\n👍 Zusage · 👎 Absage – direkt auf die Trainingsabfrage reagieren.\n⏰ Du kommst später? Reagiere auf die Verspätungsabfrage oder nutze den Link darin.\n\nInformationen: ${origin}/info\n\n_Powered by KMUC_`;
+  const welcome = `🏓 *Willkommen bei TT*\n\n*${botName}* übernimmt die Trainingsabfragen für *${trainerName}*.\n\n👍 Zusage · 👎 Absage – auf die Trainingsabfrage reagieren.\n⏰ Du kommst später? Tippe auf die ⏰-Reaktion unter der Abfrage.\nDu kannst auch schreiben: „Ich komme 10 Minuten später“.\n\nInfos und freiwillige Erinnerungen: ${origin}/info\n\n_Powered by KMUC_`;
   const members: string[] = [];
   for (const p of group.participants) {
     const user = await resolveUser(

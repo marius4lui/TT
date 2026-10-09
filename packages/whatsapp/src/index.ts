@@ -361,6 +361,15 @@ export class EvolutionClient {
     });
   }
 
+  async sendReaction(chatJid: string, messageId: string, emoji: string): Promise<{ id: string }> {
+    if (!normalizeJid(chatJid) || !messageId || messageId.length > 200 || emoji !== '⏰')
+      throw new TransportError('permanent');
+    return this.send(`/message/sendReaction/${this.instance}`, {
+      key: { remoteJid: chatJid, id: messageId, fromMe: true },
+      reaction: emoji,
+    });
+  }
+
   async connectionState(): Promise<{ state: ConnectionState }> {
     const result = object(await this.request(`/instance/connectionState/${this.instance}`));
     return { state: connection(object(result?.instance)?.state ?? result?.state) };

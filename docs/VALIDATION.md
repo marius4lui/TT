@@ -117,3 +117,12 @@ Die neue Einladung und Anmeldung wurden im lokalen Browser mit Testprovider erfo
 - Mobile Übersicht kompakter gestaltet. Den zweiten „Neue Serie“-Button im Editor entfernt. Speichern zeigt einen Bearbeitungszustand, verhindert paralleles Absenden und führt zu sichtbaren Fehlerhinweisen; ungültige Pflichtfelder werden im Dialog erklärt. Unpassende Uhrzeiten und bereits vorhandene Serien bekommen konkrete Hinweise.
 - Im tatsächlichen lokalen Worker mit D1 per Browser neue Serien angelegt, daraus erzeugte Termine geprüft und eine bestehende Serie geändert. Fehlendes Pflichtfeld und abgelehnter doppelter Termin wurden geprüft. Der konkret vom Nutzer berichtete fehlgeschlagene Eingabesatz war nicht bekannt; mit Standardzeiten war Speichern erfolgreich.
 - 437 Tests plus sieben Operator-Tests, Typecheck, Build und lokaler Worker-Smoketest erfolgreich.
+
+## Vereinfachte WhatsApp-Abfragen
+
+- Astra prüfte die Nachrichtenabläufe und implementierte die Reaktionskorrekturen. Normale Trainingsnachrichten enthalten keine Info-/Konto-/Verspätungslinks oder Werbefußzeilen mehr; diese bleiben in der einmaligen Begrüßung. Gezielt angeforderte private Konto-/Trainerlinks bleiben verfügbar.
+- Kurzfristige Einladung und Verspätungsabfrage werden zu einer einzigen Nachricht mit drei Reaktionsmöglichkeiten zusammengefasst. Der Bot setzt die Uhr-Reaktion per Evolution-Vertrag `message/sendReaction` mit dem Schlüssel seiner eigenen Nachricht.
+- Text und Reaktion sind getrennte, dauerhaft gespeicherte Versandaufträge. Tests prüfen Wiederholung nach 429, Gültigkeit bis Trainingsende, keine erneuten Textnachrichten und einmalige Nachrüstung bestehender Abfragen.
+- Reaktionswechsel und Entfernung berücksichtigen die Herkunft jeder Rückmeldung: separate Verspätung entfernen erhält die Zusage; ein Wechsel auf Daumen hoch in der kombinierten Einladung entfernt nur die dazugehörige Verspätung, keine neuere private Aussage.
+- Persönliche Hinweise berücksichtigen aktuelle Absagen und bereits bekannte Verspätungen; nach Verschiebung veraltete Antworten unterdrücken keine neue Abfrage. Verspätete Abfragen werden nur bis fünf Minuten nach Beginn nachgeholt.
+- 446 Vitest-Tests, sieben Operator-Tests, Typecheck und Build erfolgreich. Der laufende lokale Worker mit D1 und HTTP-Testprovider sendete genau eine kombinierte Gruppenabfrage plus eine native Uhr-Reaktion. Formatprüfung erfolgreich.

@@ -203,7 +203,11 @@ try {
       response.setHeader('Content-Type', 'application/json');
       if (
         request.method === 'POST' &&
-        [`/message/sendText/${instance}`, `/message/sendContact/${instance}`].includes(request.url)
+        [
+          `/message/sendText/${instance}`,
+          `/message/sendContact/${instance}`,
+          `/message/sendReaction/${instance}`,
+        ].includes(request.url)
       ) {
         const id = `smoke-provider-${randomUUID()}`;
         sent.push({ ...data, id, path: request.url });
@@ -518,6 +522,30 @@ SELECT COUNT(*) AS n FROM messages WHERE kind='invite' AND chat_jid=${quote(grou
     !sent.some((message) => message.path === `/message/sendContact/${instance}`),
     'unexpected_contact_card_spam',
   );
+  if (!process.argv.includes('--browser')) {
+    stage = 'last-minute invitation and native clock reaction';
+    const at = Date.now();
+    await sql(
+      `UPDATE training_sessions SET version=version+1,start_at=${at + 60000},end_at=${at + 3600000},invite_at=${at - 2000},late_at=${at - 1000};`,
+    );
+    const before = sent.length;
+    check((await local('/cdn-cgi/local/scheduled')).ok, 'combined_scheduler_failed');
+    const combined = await waitSent(
+      before,
+      (message) => message.number === groupJid && message.text?.includes('⏰ Ich komme später'),
+    );
+    await waitSent(
+      before,
+      (message) => message.key?.id === combined.id && message.reaction === '⏰',
+    );
+    check(
+      sent.slice(before).filter((message) => message.number === groupJid && message.text).length ===
+        1,
+      'duplicate_late_prompt',
+    );
+    check(!/https?:|Powered|\/r\//.test(combined.text), 'repeated_links');
+    progress('one combined last-minute message and native clock reaction verified');
+  }
   progress('PASS — local Worker, D1, cron, Evolution mock, reactions and authentication');
   if (process.argv.includes('--browser')) {
     // Hold the exact tested Worker/D1 for authorized browser acceptance; no UI mocks

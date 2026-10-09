@@ -233,10 +233,19 @@ describe('Evolution transport', () => {
       linkPreview: false,
     });
     fetcher.mockResolvedValue(
+      new Response(JSON.stringify({ key: { id: 'reaction-1' } }), { status: 201 }),
+    );
+    await client(fetcher).sendReaction('120363123456@g.us', 'sent-1', '⏰');
+    expect(fetcher.mock.calls[1][0]).toBe('https://evolution.example/message/sendReaction/tt-test');
+    expect(JSON.parse(String(fetcher.mock.calls[1][1]?.body))).toEqual({
+      key: { remoteJid: '120363123456@g.us', id: 'sent-1', fromMe: true },
+      reaction: '⏰',
+    });
+    fetcher.mockResolvedValue(
       new Response(JSON.stringify({ key: { id: 'contact-1' } }), { status: 201 }),
     );
     await client(fetcher).sendContact('491701234567@s.whatsapp.net', 'TT', '+491709999999');
-    expect(JSON.parse(String(fetcher.mock.calls[1][1]?.body)).contact[0]).toEqual({
+    expect(JSON.parse(String(fetcher.mock.calls[2][1]?.body)).contact[0]).toEqual({
       fullName: 'TT',
       wuid: '491709999999',
       phoneNumber: '+491709999999',

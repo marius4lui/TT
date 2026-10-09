@@ -53,7 +53,13 @@ afterEach(() => {
 function sender() {
   const sendText = vi.fn().mockImplementation(async () => ({ id: crypto.randomUUID() }));
   const sendContact = vi.fn().mockResolvedValue({ id: 'card-id' });
-  return { client: { sendText, sendContact } as unknown as EvolutionClient, sendText, sendContact };
+  const sendReaction = vi.fn().mockImplementation(async () => ({ id: crypto.randomUUID() }));
+  return {
+    client: { sendText, sendContact, sendReaction } as unknown as EvolutionClient,
+    sendText,
+    sendContact,
+    sendReaction,
+  };
 }
 async function job(overrides: Partial<QueueInput> = {}) {
   await queue(
@@ -73,6 +79,80 @@ async function job(overrides: Partial<QueueInput> = {}) {
 }
 
 describe('durable planning and delivery guards', () => {
+  it('combines overdue invitation and late prompt without links or a second text', async () => {
+    const at = times.startAt - 60_000;
+    await planJobs(db, at);
+    const mock = sender();
+    await sendOutbox(env, at, mock.client);
+    // One group invitation and one explicitly subscribed personal invitation.
+    expect(mock.sendText).toHaveBeenCalledTimes(2);
+    for (const [, text] of mock.sendText.mock.calls) {
+      expect(text).toContain('👍 Ich komme');
+      expect(text).toContain('👎 Ich komme nicht');
+      expect(text).toContain('⏰ Ich komme später');
+      expect(text).not.toMatch(/https?:|Powered|training\)/);
+    }
+    expect(mock.sendReaction).toHaveBeenCalledTimes(2);
+    await planJobs(db, at + 60_000);
+    await sendOutbox(env, at + 60_000, mock.client);
+    expect(mock.sendText).toHaveBeenCalledTimes(2);
+    expect(mock.sendReaction).toHaveBeenCalledTimes(2);
+  });
+  it('keeps a clock retry independent from the text and valid after training starts', async () => {
+    const at = times.startAt - 1000;
+    await job({ kind: 'invite' });
+    const mock = sender();
+    mock.sendReaction.mockRejectedValueOnce(new TransportError('retryable', 429, 20_000));
+    await sendOutbox(env, at, mock.client);
+    expect(mock.sendText).toHaveBeenCalledTimes(1);
+    const clock = await db
+      .prepare("SELECT expires_at,status FROM outbox_jobs WHERE kind='clock'")
+      .first();
+    expect(clock).toEqual({ expires_at: times.endAt, status: 'pending' });
+    await sendOutbox(env, at + 30_000, mock.client);
+    expect(mock.sendText).toHaveBeenCalledTimes(1);
+    expect(mock.sendReaction).toHaveBeenCalledTimes(2);
+    expect(await db.prepare("SELECT status FROM outbox_jobs WHERE kind='clock'").first()).toEqual({
+      status: 'sent',
+    });
+  });
+  it('backfills only the clock on an already sent current late prompt', async () => {
+    await job({ kind: 'late', key: 'old-late', expires: times.endAt });
+    await db
+      .prepare(
+        "UPDATE outbox_jobs SET status='sent',provider_id='old-prompt' WHERE dedupe_key='old-late'",
+      )
+      .run();
+    await db
+      .prepare(
+        "INSERT INTO messages(id,chat_jid,session_id,session_version,kind,created_at) VALUES('old-prompt',?,'training',1,'late',?)",
+      )
+      .bind(group, now)
+      .run();
+    await planJobs(db, times.startAt + 10 * 60_000);
+    const mock = sender();
+    await sendOutbox(env, times.startAt + 10 * 60_000, mock.client);
+    expect(mock.sendText).not.toHaveBeenCalled();
+    expect(mock.sendReaction).toHaveBeenCalledWith(group, 'old-prompt', '⏰');
+    await planJobs(db, times.startAt + 11 * 60_000);
+    await sendOutbox(env, times.startAt + 11 * 60_000, mock.client);
+    expect(mock.sendReaction).toHaveBeenCalledTimes(1);
+  });
+  it.each([0, 1])(
+    'uses only current absence to suppress a private late notice (stale=%s)',
+    async (stale) => {
+      await db
+        .prepare(
+          "INSERT INTO attendance(session_id,user_id,response,needs_confirmation,updated_at) VALUES('training','member','no',?,?)",
+        )
+        .bind(stale, now)
+        .run();
+      await job({ kind: 'personal_late', userId: 'member', chat: jid, expires: times.endAt });
+      const mock = sender();
+      await sendOutbox(env, times.lateReminderAt, mock.client);
+      expect(mock.sendText).toHaveBeenCalledTimes(stale);
+    },
+  );
   it('renders delayed late reminders using the actual remaining time at delivery', async () => {
     await job({
       kind: 'late',
@@ -81,7 +161,7 @@ describe('durable planning and delivery guards', () => {
       expires: times.endAt,
     });
     const mock = sender();
-    expect(await sendOutbox(env, times.startAt - 7 * 60_000, mock.client)).toBe(1);
+    expect(await sendOutbox(env, times.startAt - 7 * 60_000, mock.client)).toBe(2);
     expect(mock.sendText.mock.calls[0][1]).toContain('7 Minuten');
     expect(mock.sendText.mock.calls[0][1]).not.toContain('30 Minuten');
   });

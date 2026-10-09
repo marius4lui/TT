@@ -342,7 +342,7 @@ async function confirmOperation(
         ...notifyChange(
           ctx,
           moved,
-          `↪️ Training verschoben\n${label(moved)}\nBitte bestätige deine Teilnahme erneut auf der neuen Einladung.\n${ctx.origin}/t/${t.id}`,
+          `↪️ Training verschoben\n${label(moved)}\nBitte bestätige deine Teilnahme erneut auf der neuen Einladung.`,
         ),
       );
     }
@@ -924,11 +924,18 @@ export async function recordAttendance(
         after.attendance === 'no'
           ? 'Deine Absage ist eingetragen.'
           : after.late
-            ? `Deine Verspätung ist eingetragen.${after.minutes ? ` Ungefähr ${after.minutes} Minuten.` : ''}${arrival ? ` Ankunft: ${arrival}.` : ''} Danke fürs Bescheidgeben. Beim nächsten Mal kannst du mit ⏰ auf die Verspätungsnachricht reagieren.`
+            ? `⏰ Eingetragen: ${arrival ? `Ankunft um ${arrival} Uhr` : after.minutes ? `ca. ${after.minutes} Minuten später` : 'du kommst später'}.`
             : after.attendance === 'yes'
-              ? 'Du bist angemeldet. Bitte sei pünktlich da.'
+              ? '👍 Du bist dabei.'
               : 'Deine Rückmeldung wurde zurückgenommen.';
-      const body = `${text}\n${label(t)}`;
+      const date = new Intl.DateTimeFormat('de-DE', {
+        timeZone: t.timezone,
+        day: '2-digit',
+        month: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+      }).format(new Date(t.start_at));
+      const body = `${text}\nTraining am ${date} Uhr.`;
       // changes() refers to the immediately preceding optimistic UPDATE in this
       // transaction. A lost race cannot enqueue a misleading acknowledgement.
       // Choose private delivery from live consent, not the earlier user snapshot.
@@ -1036,16 +1043,21 @@ export async function processMessage(
     const invitationTarget = ['invite', 'personal_invite'].includes(target.kind),
       lateTarget = ['late', 'personal_late'].includes(target.kind);
     if (!invitationTarget && !lateTarget) return;
-    if (emoji !== '' && (invitationTarget ? !['👍', '👎'].includes(emoji) : emoji !== '⏰')) return;
+    if (emoji !== '' && (invitationTarget ? !['👍', '👎', '⏰'].includes(emoji) : emoji !== '⏰'))
+      return;
     const change: AttendanceChange = {
       id: event.id,
       timestamp: event.timestamp,
       source: 'reaction',
       targetId: event.reaction.targetId,
       remove: emoji === '',
+      removeLatenessOnly: lateTarget,
     };
-    if (invitationTarget && emoji) change.attendance = emoji === '👍' ? 'yes' : 'no';
-    if (lateTarget && emoji) {
+    if (invitationTarget && ['👍', '👎'].includes(emoji)) {
+      change.attendance = emoji === '👍' ? 'yes' : 'no';
+      change.clearOwnLateness = emoji === '👍';
+    }
+    if (emoji === '⏰') {
       change.late = true;
       change.attendance = 'yes';
     }

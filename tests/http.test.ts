@@ -141,15 +141,13 @@ describe('HTTP boundary and public privacy', () => {
     expect(html).not.toContain(member.display_name);
     expect(html).not.toContain(member.jid);
   });
-  it('sets no-store on login and redirects only live training IDs to explicit WhatsApp commands', async () => {
+  it('retires old training links without a WhatsApp round trip or exposed training ID', async () => {
     const login = await request('/login');
     expect(login.status).toBe(200);
     expect(login.headers.get('Cache-Control')).toBe('no-store');
     const redirect = await request('/r/training');
     expect(redirect.status).toBe(302);
-    expect(redirect.headers.get('Location')).toBe(
-      'https://wa.me/491701234567?text=Ich%20komme%20sp%C3%A4ter%20zum%20Training%20(training).',
-    );
+    expect(redirect.headers.get('Location')).toBe('/info');
     expect(redirect.headers.get('Cache-Control')).toBe('no-store');
     await db.prepare("UPDATE training_sessions SET status='cancelled'").run();
     expect((await request('/r/training')).status).toBe(404);

@@ -139,6 +139,45 @@ describe('attendance provenance', () => {
       }),
     ).toEqual(state);
   });
+  it('removes only lateness from a dedicated prompt and ignores older replacement reactions', () => {
+    const late = reduceAttendance(emptyAttendance(), {
+      id: 'clock',
+      timestamp: 2,
+      source: 'reaction',
+      targetId: 'late',
+      attendance: 'yes',
+      late: true,
+    });
+    const punctual = reduceAttendance(late, {
+      id: 'removed',
+      timestamp: 3,
+      source: 'reaction',
+      targetId: 'late',
+      remove: true,
+      removeLatenessOnly: true,
+    });
+    expect(punctual).toMatchObject({ attendance: 'yes', late: false });
+    expect(
+      reduceAttendance(late, {
+        id: 'stale',
+        timestamp: 1,
+        source: 'reaction',
+        targetId: 'late',
+        attendance: 'yes',
+        clearOwnLateness: true,
+      }),
+    ).toEqual(late);
+    expect(
+      reduceAttendance(punctual, {
+        id: 'clock',
+        timestamp: 2,
+        source: 'reaction',
+        targetId: 'late',
+        attendance: 'yes',
+        late: true,
+      }),
+    ).toEqual(punctual);
+  });
   it('supports current reaction removal, ignores out-of-order replay and clears lateness on absence', () => {
     let state = reduceAttendance(emptyAttendance(), {
       id: 'a',

@@ -218,6 +218,40 @@ describe('trainer dialogs and controlled activation', () => {
 });
 
 describe('participation and private/group provenance', () => {
+  it('keeps participation when the dedicated lateness reaction is removed', async () => {
+    await react('👍');
+    await react('⏰', 'late-prompt');
+    await react('', 'late-prompt');
+    expect(await attendance()).toMatchObject({
+      response: 'yes',
+      punctuality: 'punctual',
+      minutes: null,
+    });
+    expect(await db.prepare('SELECT COUNT(*) AS n FROM outbox_jobs').first('n')).toBe(0);
+  });
+  it('supports the clock on combined invitations and a replacement thumbs-up clears its lateness', async () => {
+    await react('⏰');
+    expect(await attendance()).toMatchObject({ response: 'yes', punctuality: 'late' });
+    await react('👍');
+    expect(await attendance()).toMatchObject({
+      response: 'yes',
+      punctuality: 'punctual',
+      minutes: null,
+    });
+    await react('⏰');
+    await send(member, '/spät training 20');
+    await react('👍');
+    expect(await attendance()).toMatchObject({ response: 'yes', punctuality: 'late', minutes: 20 });
+  });
+  it('does not clear separate lateness when replacing a combined invitation reaction', async () => {
+    await react('⏰');
+    await react('⏰', 'late-prompt');
+    await react('👍');
+    expect(await attendance()).toMatchObject({ response: 'yes', punctuality: 'late' });
+    await send(member, '/nein training');
+    await react('', 'late-prompt');
+    expect(await attendance()).toMatchObject({ response: 'no', punctuality: 'punctual' });
+  });
   it('supports reaction changes, private lateness and old reaction removal without losing the private answer', async () => {
     await react('👍🏽');
     expect((await attendance())?.response).toBe('yes');

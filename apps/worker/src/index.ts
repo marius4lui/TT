@@ -168,14 +168,9 @@ app.get('/r/:id', async (c) => {
     .bind(c.req.param('id'), Date.now())
     .first<{ id: string }>();
   if (!t) return c.text('Dieser Termin ist nicht mehr verfügbar.', 404);
-  const jid = await setting(c.env.DB, 'bot_jid');
-  if (!/^\d{5,20}@s\.whatsapp\.net$/.test(jid))
-    return c.text('Der Bot wird noch eingerichtet.', 503);
   c.header('Cache-Control', 'no-store');
-  return c.redirect(
-    `https://wa.me/${jid.split('@')[0]}?text=${encodeURIComponent(`Ich komme später zum Training (${t.id}).`)}`,
-    302,
-  );
+  // Old links remain harmless; new notices use native WhatsApp reactions only.
+  return c.redirect('/info', 302);
 });
 app.get('*', async (c) => {
   const botJid = await setting(c.env.DB, 'bot_jid');

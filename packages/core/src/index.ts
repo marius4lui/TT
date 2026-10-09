@@ -184,6 +184,10 @@ export interface AttendanceChange extends ChangeStamp {
   late?: boolean;
   minutes?: number;
   remove?: boolean;
+  /** Removing a clock on the separate lateness prompt does not withdraw participation. */
+  removeLatenessOnly?: boolean;
+  /** A replacement thumbs-up clears lateness only when that same reaction set it. */
+  clearOwnLateness?: boolean;
 }
 export const emptyAttendance = (): AttendanceState => ({ attendance: 'unknown', late: false });
 
@@ -212,7 +216,7 @@ export function reduceAttendance(
     if (change.source !== 'reaction' || !change.targetId) return previous;
     const removable = (old?: ChangeStamp) =>
       old?.source === 'reaction' && old.targetId === change.targetId && newer(change, old);
-    if (removable(state.attendanceStamp)) {
+    if (!change.removeLatenessOnly && removable(state.attendanceStamp)) {
       state.attendance = 'unknown';
       state.attendanceStamp = stamp;
     }
@@ -222,6 +226,18 @@ export function reduceAttendance(
       state.lateStamp = stamp;
     }
     return state;
+  }
+  if (
+    change.clearOwnLateness &&
+    change.source === 'reaction' &&
+    change.targetId &&
+    state.lateStamp?.source === 'reaction' &&
+    state.lateStamp.targetId === change.targetId &&
+    newer(change, state.lateStamp)
+  ) {
+    state.late = false;
+    delete state.minutes;
+    state.lateStamp = stamp;
   }
   if (change.attendance && newer(change, state.attendanceStamp)) {
     state.attendance = change.attendance;

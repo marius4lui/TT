@@ -102,9 +102,6 @@ export async function renderTrainerSummary(
           .join(', ') || 'keine'
       }`,
     );
-  lines.push(
-    'Aktueller Stand zum Versandzeitpunkt. Persönliche Trainerübersichten kannst du im Trainerbereich ausschalten.',
-  );
   return lines.join('\n\n');
 }
 export async function planTrainerSummaries(db: D1Database, now: number): Promise<void> {
