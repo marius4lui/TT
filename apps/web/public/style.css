@@ -2251,10 +2251,10 @@ summary::-webkit-details-marker {
     font-size: 9px;
   }
   .workspace-main {
-    padding: 26px 20px calc(108px + env(safe-area-inset-bottom));
+    padding: 18px 20px calc(92px + env(safe-area-inset-bottom));
   }
   .trainer-heading {
-    margin-bottom: 23px;
+    margin-bottom: 16px;
   }
   .trainer-heading h1 {
     font-size: 29px;
@@ -2267,17 +2267,21 @@ summary::-webkit-details-marker {
     font-size: 12px;
   }
   .next-training {
-    padding: 23px;
+    padding: 16px;
     border-radius: 21px;
   }
   .next-training h2 {
-    font-size: 28px;
+    font-size: 25px;
+    margin-bottom: 6px;
   }
   .next-time {
     font-size: 23px;
   }
   .next-training-head {
-    margin-bottom: 21px;
+    margin-bottom: 12px;
+  }
+  .next-location {
+    margin: 6px 0 14px;
   }
   .next-training-head .card-kicker {
     font-size: 9px;
@@ -2288,7 +2292,7 @@ summary::-webkit-details-marker {
     padding: 5px 8px;
   }
   .response-stat {
-    padding: 14px 5px 12px;
+    padding: 10px 5px;
   }
   .response-stat strong {
     font-size: 27px;
@@ -2298,7 +2302,8 @@ summary::-webkit-details-marker {
   }
   .next-actions {
     flex-direction: column;
-    gap: 8px;
+    gap: 4px;
+    margin-top: 14px;
   }
   .next-actions .button {
     width: 100%;
@@ -2312,7 +2317,8 @@ summary::-webkit-details-marker {
   }
   .response-footnote {
     font-size: 10px;
-    line-height: 1.6;
+    line-height: 1.45;
+    margin-top: 8px;
   }
   .section-heading {
     gap: 14px;
@@ -2442,7 +2448,7 @@ summary::-webkit-details-marker {
     padding-right: 16px;
   }
   .next-training {
-    padding: 19px;
+    padding: 16px;
   }
   .next-training h2 {
     font-size: 25px;

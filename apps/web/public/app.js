@@ -98,6 +98,7 @@
       }
       node.setAttribute('tabindex', '-1');
       node.focus({ preventScroll: true });
+      node.scrollIntoView({ block: 'nearest', behavior: 'instant' });
     }
   };
   const clearError = (node) => {
@@ -111,6 +112,15 @@
     form.setAttribute('aria-busy', String(busy));
     $$('button[type="submit"],button[data-action]', form).forEach((button) => {
       button.disabled = busy;
+      if (button.type === 'submit') {
+        if (busy && !button.dataset.idleLabel) {
+          button.dataset.idleLabel = button.textContent;
+          button.textContent = 'Wird gespeichert …';
+        } else if (!busy && button.dataset.idleLabel) {
+          button.textContent = button.dataset.idleLabel;
+          delete button.dataset.idleLabel;
+        }
+      }
     });
   };
   const text = (tag, value, className) => {
@@ -929,7 +939,7 @@
         card.append(
           text(
             'p',
-            `${series.location || 'Ort folgt'} · Einladung ${series.reminderTime} · Verspätungsinfo nach ${series.lateOffset} Min.`,
+            `${series.location || 'Ort folgt'} · Einladung ${series.reminderTime} · Verspätungsinfo ${series.lateOffset} Min. vor Beginn`,
           ),
         );
         const actions = document.createElement('div');
@@ -1326,15 +1336,6 @@
             showError(errorNode, error);
           }
         }
-        if (action === 'reset-series') {
-          const form = $('[data-form="series"]', root);
-          form.reset();
-          form.elements.seriesId.value = '';
-          form.elements.version.value = '';
-          form.elements.groupJid.disabled = false;
-          $('[data-series-form-kicker]', form).textContent = 'NEUE SERIE';
-          $('[data-series-form-title]', form).textContent = 'Wiederkehrendes Training';
-        }
         if (action === 'load-requests') loadRequests();
         if (action === 'load-admins') loadAdmins();
         if (action === 'close-editor') {
@@ -1608,10 +1609,22 @@
       }
     });
 
+    root.addEventListener(
+      'invalid',
+      (event) => {
+        const field = event.target;
+        const form = field.closest('[data-form]');
+        if (!form || form.querySelector(':invalid') !== field) return;
+        const label = field.labels?.[0]?.textContent.trim() || 'Eingabe';
+        showError(errorNode, userError(`${label}: ${field.validationMessage}`));
+      },
+      true,
+    );
     root.addEventListener('submit', async (event) => {
       const form = event.target.closest('[data-form]');
       if (!form) return;
       event.preventDefault();
+      if (form.getAttribute('aria-busy') === 'true') return;
       if (!overview) {
         showError(errorNode, userError('Bitte lade die Trainingsdaten zuerst über Aktualisieren.'));
         return;
@@ -1640,6 +1653,23 @@
             break;
           case 'series': {
             const id = values.seriesId;
+            if (values.endTime <= values.startTime)
+              throw userError(
+                'Das Ende muss am selben Tag nach dem Beginn liegen. Bitte prüfe beide Uhrzeiten.',
+              );
+            if (
+              !id &&
+              overview.series.some(
+                (series) =>
+                  series.active &&
+                  series.groupJid === values.groupJid &&
+                  series.weekday === Number(values.weekday) &&
+                  series.startTime === values.startTime,
+              )
+            )
+              throw userError(
+                'Für diese Gruppe gibt es an diesem Wochentag zur gleichen Uhrzeit bereits eine Serie. Öffne die bestehende Serie über „Bearbeiten“.',
+              );
             const data = {
               weekday: Number(values.weekday),
               startTime: values.startTime,

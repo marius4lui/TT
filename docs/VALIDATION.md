@@ -108,3 +108,12 @@ Diese Prüfung ergänzt und ersetzt die früheren offenen Punkte zur lokalen Bro
 - Produktive Automatik unverändert pausiert; Datenschutzhinweise freigegeben und genau ein Owner vorhanden. Keine zusätzliche echte WhatsApp-Testnachricht ausgelöst.
 
 Die neue Einladung und Anmeldung wurden im lokalen Browser mit Testprovider erfolgreich geprüft. Eine erneute vollständige Abnahme dieser neuen Abläufe mit realem WhatsApp auf dem Handy steht aus. GitHub-CI-Status ist getrennt von den lokal erfolgreichen Prüfungen zu bewerten.
+
+## Korrektur von Serverzeit und mobiler Bedienung
+
+- Beim gemeldeten `/login` lagen zwischen Antwortauftrag und Versandbeginn etwa 0,6 Sekunden; keine offenen oder fehlgeschlagenen Worker-Jobs. Evolution meldete den zugehörigen Link als gelesen, versah ihn aber mit einem Zeitstempel vor der Anfrage.
+- Die Evolution-/Coolify-VM ging 45,9 Sekunden nach. `systemd-timesyncd` war aktiv, der per Netzwerk gelieferte Zeitserver antwortete jedoch nicht. Zwei externe NTP-Quellen bestätigten die Abweichung unabhängig.
+- Nach ausdrücklicher Freigabe für Coolify-Reparaturen wurde `/etc/systemd/timesyncd.conf.d/90-tt-time-sync.conf` mit `time.cloudflare.com` und `ntp.ubuntu.com` eingerichtet und ausschließlich der Zeitdienst neu gestartet. Nachprüfung: synchronisiert, Abweichung rund 1,5 Millisekunden. Anwendungen wurden nicht neu gestartet. Rücknahme: diese Drop-in-Datei entfernen und den Zeitdienst neu starten; das würde die vorherige nicht erreichbare Zeitquelle wiederherstellen.
+- Mobile Übersicht kompakter gestaltet. Den zweiten „Neue Serie“-Button im Editor entfernt. Speichern zeigt einen Bearbeitungszustand, verhindert paralleles Absenden und führt zu sichtbaren Fehlerhinweisen; ungültige Pflichtfelder werden im Dialog erklärt. Unpassende Uhrzeiten und bereits vorhandene Serien bekommen konkrete Hinweise.
+- Im tatsächlichen lokalen Worker mit D1 per Browser neue Serien angelegt, daraus erzeugte Termine geprüft und eine bestehende Serie geändert. Fehlendes Pflichtfeld und abgelehnter doppelter Termin wurden geprüft. Der konkret vom Nutzer berichtete fehlgeschlagene Eingabesatz war nicht bekannt; mit Standardzeiten war Speichern erfolgreich.
+- 437 Tests plus sieben Operator-Tests, Typecheck, Build und lokaler Worker-Smoketest erfolgreich.
