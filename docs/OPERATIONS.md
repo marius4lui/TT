@@ -77,6 +77,20 @@ Die Spracherkennung läuft ausschließlich mit lokalen, begrenzten Regeln im Wor
 
 Bei mehreren passenden Terminen fragt der Bot nach dem Termin. Unsichere oder widersprüchliche Selbstaussagen lösen eine kurze Klärung aus und ändern nichts. Zitate, fremde Personen und nicht unterstützte Datumsangaben werden nicht als Zusage verwendet. Die Regeln sind bewusst begrenzt und verstehen nicht jede beliebige Formulierung. Neue Beispiele als positive **und** negative Regressionstests in `packages/core/tests/language-corrections.test.ts` ergänzen; Zustandswechsel zusätzlich in `tests/bot.test.ts` prüfen.
 
+## Trainingsfragen im Chat
+
+Drei getrennte, rein regelbasierte Bereiche beantworten klare Fragen mit einer kurzen Nachricht:
+
+- Termine: „Wann ist nächstes Mal Training?“, „Armin wann ist noch mal Training“, „Ist morgen Training?“ oder „Fällt das Training heute aus?“
+- Details: „Wo ist Training?“, „Um wie viel Uhr beginnt das Training?“, „Wann endet das Training?“ und „Wie lange dauert das Training?“
+- Eigene Rückmeldung: „Bin ich angemeldet?“, „Habe ich fürs Training zugesagt?“ oder „Bin ich als verspätet eingetragen?“
+
+Antworten enthalten die gespeicherten Daten, keine internen Termin-IDs und keine wiederholten Links. „Nächstes Training“ überspringt einen laufenden Termin und berücksichtigt Absagen. Ohne „nächstes“ kann ein laufender Termin gemeint sein und wird entsprechend bezeichnet. Heute und morgen werden in der Zeitzone des jeweiligen Termins ausgewertet. Fehlende Plandaten werden ausdrücklich als fehlender Eintrag beschrieben, nicht als Zusicherung, dass kein Training stattfindet.
+
+In Gruppen beziehen sich Auskünfte nur auf diese Gruppe. Privat werden ausschließlich freigegebene Gruppen mit aktiver eigener Mitgliedschaft berücksichtigt; mehrere passende Gruppen werden beschriftet. Eigene Statusfragen zeigen nur die eigene Rückmeldung, ändern weder Teilnahme noch Registrierung oder Erinnerungszustimmung und weisen auf nötige Neubestätigung nach Terminänderungen hin.
+
+Normales Gespräch, Zitate, Aussagen über andere und nicht unterstützte Datumsfragen lösen keine Auskunft aus. Die bisherigen Rückfragen zu mehrdeutigen Teilnahmeaussagen bleiben bestehen. `/termine` ist weiterhin als Auskunft verfügbar; `/training` zeigt in einer Gruppe die Termine, privat bleibt der ältere Trainerdialog erhalten. Neue Fragevarianten gehören mit Gegenbeispielen in `tests/questions-*.test.ts`.
+
 ## Ausfälle und Wiederanlauf
 
 Einladungen, Änderungen und persönliche Übersichten liegen dauerhaft in D1. Versand prüft Terminversion, Gruppenzustand und gegebenenfalls aktuelle Rolle und Zustimmung. Begrenzte Wiederholungen sind nur bei eindeutig wiederholbaren Fehlern erlaubt. Bei Timeout nach möglicher Annahme oder unterbrochenem Sender bleibt der Auftrag `uncertain`; nicht blind erneut senden, da die Nachricht schon in WhatsApp stehen könnte.

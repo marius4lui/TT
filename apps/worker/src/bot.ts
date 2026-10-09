@@ -16,6 +16,7 @@ import { all, setting } from './db';
 import type { Env, BotContext, User } from './types';
 import { evolution, queue } from './outbox';
 import { requestGroupLink } from './group-requests';
+import { answerTrainingQuestion } from './questions';
 import {
   dateInZone,
   findTraining,
@@ -1108,6 +1109,11 @@ export async function processMessage(
     for (let i = 0; i < account.length; i++) await reply(ctx, account[i], i);
     return;
   }
+  const questionAnswer = await answerTrainingQuestion(ctx);
+  if (questionAnswer !== null) {
+    await reply(ctx, questionAnswer);
+    return;
+  }
   const c = await conversation(ctx);
   if (!ctx.isGroup && /https:\/\/chat\.whatsapp\.com\//i.test(ctx.text)) {
     const links = ctx.text.match(/https:\/\/chat\.whatsapp\.com\/[^\s<>]+/gi) ?? [];
@@ -1140,7 +1146,6 @@ export async function processMessage(
     await reply(ctx, message);
     return;
   }
-  if (!ctx.isGroup && natural === 'schedule') ctx.text = '/termine';
   if (c?.kind === 'language:choice' && /^\d{1,2}[.!]?$/.test(ctx.text.trim())) {
     const data = JSON.parse(c.data) as {
       ids: string[];
@@ -1236,24 +1241,6 @@ export async function processMessage(
       }
       throw error;
     }
-  }
-  if (cmd === '/termine' || (!ctx.isGroup && natural === 'schedule')) {
-    const memberGroups = await all<{ group_jid: string }>(
-      env.DB,
-      'SELECT group_jid FROM memberships WHERE user_id=? AND active=1',
-      user.id,
-    );
-    const rows = (await upcoming(env.DB, now)).filter((t) =>
-      memberGroups.some((m) => m.group_jid === t.group_jid),
-    );
-    await reply(
-      ctx,
-      rows
-        .slice(0, 8)
-        .map((t) => `${label(t)}${t.status === 'cancelled' ? ' · abgesagt' : ''}\n${t.id}`)
-        .join('\n\n') || 'Keine freigeschalteten Termine.',
-    );
-    return;
   }
   if (['/ja', '/nein', '/spat', '/spaet', '/punktlich', '/puenktlich'].includes(cmd)) {
     let ref = args[0],

@@ -411,6 +411,39 @@ INSERT INTO bootstrap(id,state,code_hash,expires_at) VALUES(1,'pending',${quote(
     'absence replaced by attendance with five minutes lateness and one concise acknowledgment',
   );
 
+  stage = 'read-only conversational training questions';
+  for (const [question, expected] of [
+    ['Armin wann ist noch mal Training', 'Smokehalle'],
+    ['Wann ist nächstes Mal Training?', 'Smokehalle'],
+    ['Wo ist Training?', 'Smokehalle'],
+    ['Wie lange dauert das Training?', '120 Minuten'],
+    ['Bin ich angemeldet?', '5 Minuten'],
+  ]) {
+    const offset = sent.length;
+    await webhook(memberJid, question, { group: true });
+    const answer = await waitSent(
+      offset,
+      (message) => message.number === groupJid && message.text?.includes(expected),
+    );
+    check(!answer.text.includes('https://'), 'question_link_spam');
+    check(
+      sent.slice(offset).filter((message) => message.text).length === 1,
+      'multiple_question_answers',
+    );
+  }
+  const afterQuestions = await sql(
+    `SELECT response,punctuality,minutes FROM attendance a JOIN users u ON u.id=a.user_id WHERE u.jid=${quote(memberJid)};`,
+  );
+  check(
+    afterQuestions[0]?.results?.[0]?.response === 'yes' &&
+      afterQuestions[0].results[0].punctuality === 'late' &&
+      afterQuestions[0].results[0].minutes === 5,
+    'question_changed_attendance',
+  );
+  progress(
+    'schedule, location, duration and own status answered once each without changing attendance',
+  );
+
   stage = 'one-message magic login, web registration and optional reminders';
   const api = (path, method, data, session = '') =>
     local(path, {
