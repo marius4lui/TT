@@ -30,7 +30,7 @@ Vor dem Start die Gruppe informieren und Datenschutzhinweise prüfen. Trainingsn
 
 ## Konfiguration und lokale Prüfung
 
-`wrangler.jsonc` enthält die Worker-/Domain-Konfiguration, die vorhandene D1-ID sowie Evolution-URL und Instanz. Die bestehende Datenbank `tt` nicht neu anlegen. Der Worker benötigt `EVOLUTION_URL`, `EVOLUTION_INSTANCE` und `EVOLUTION_API_KEY`. Lokal liest Wrangler den API-Key aus der ignorierten Datei `.dev.vars`; auf Cloudflare liegt er als Worker-Secret. Er gehört niemals in `vars`, Git, Frontend-Dateien oder Logs. Die verschlüsselte Windows-Eingabe und Prüfung sind in [CREDENTIALS.md](CREDENTIALS.md) beschrieben.
+`wrangler.jsonc` enthält die Worker-/Domain-Konfiguration, die aktuelle D1-ID sowie Evolution-URL und Instanz. Die aktive Datenbank heißt `tt-production`; die alte Datenbank wurde gelöscht. Siehe [PRODUCTION.md](PRODUCTION.md) zur neuen Einrichtung. Der Worker benötigt `EVOLUTION_URL`, `EVOLUTION_INSTANCE` und `EVOLUTION_API_KEY`. Lokal liest Wrangler den API-Key aus der ignorierten Datei `.dev.vars`; auf Cloudflare liegt er als Worker-Secret. Er gehört niemals in `vars`, Git, Frontend-Dateien oder Logs. Die verschlüsselte Windows-Eingabe und Prüfung sind in [CREDENTIALS.md](CREDENTIALS.md) beschrieben.
 
 ```sh
 pnpm install --frozen-lockfile
