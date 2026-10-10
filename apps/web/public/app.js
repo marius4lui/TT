@@ -55,6 +55,7 @@
             'Bitte prüfe die Angaben. Alle Pflichtfelder müssen vollständig ausgefüllt sein.',
           invalid_calendar: 'Die Zeiten passen nicht zusammen. Prüfe Datum, Beginn und Ende.',
           privacy_required: 'Hinterlege zuerst die Datenschutzhinweise unter Einstellungen.',
+          group_approval_required: 'Gib zuerst eine Trainingsgruppe frei und wähle sie unter Einstellungen aus.',
           group_unavailable:
             'Diese Gruppe ist derzeit nicht verfügbar. Aktualisiere die Gruppenliste.',
           consent_required: 'Bitte bestätige deine Auswahl, bevor du fortfährst.',
@@ -608,7 +609,9 @@
           : 'Trainingsnachrichten sind pausiert';
       $('[data-activation-description]', root).textContent = enabled
         ? 'Du kannst den Nachrichtenbetrieb jederzeit pausieren. Der Trainingsplan bleibt erhalten.'
-        : 'Die Aktivierung erfolgt erst nach deiner ausdrücklichen Bestätigung.';
+        : !overview.settings.privacyReady
+          ? 'Speichere und bestätige zuerst die Datenschutzhinweise oben. Danach kannst du die Trainingsnachrichten aktivieren.'
+          : 'Die Aktivierung erfolgt erst nach deiner ausdrücklichen Bestätigung.';
       $('[data-activation-button]', root).textContent = enabled
         ? 'Trainingsnachrichten pausieren'
         : 'Trainingsnachrichten aktivieren';
@@ -1706,6 +1709,12 @@
             });
             break;
           case 'activation':
+            if (!overview.settings.enabled && !overview.settings.privacyReady) {
+              const privacy = $('[data-create="privacy"]', root);
+              privacy.open = true;
+              $('#privacy-text', privacy).focus();
+              throw userError('Bitte zuerst die Datenschutzhinweise speichern und bestätigen. Danach kannst du hier aktivieren.');
+            }
             await put(route('/settings'), { enabled: !overview.settings.enabled, confirm: true });
             break;
           case 'group-request':

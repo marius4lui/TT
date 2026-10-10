@@ -182,7 +182,9 @@ describe('trainer web authorization and settings', () => {
   });
   it('requires explicit confirmation and published privacy before activation', async () => {
     expect((await request('/settings', 'PUT', { enabled: true })).status).toBe(400);
-    expect((await request('/settings', 'PUT', { enabled: true, confirm: true })).status).toBe(409);
+    const blocked = await request('/settings', 'PUT', { enabled: true, confirm: true });
+    expect(blocked.status).toBe(409);
+    expect(await blocked.json()).toMatchObject({ error: 'privacy_required' });
     expect(
       (
         await request('/settings', 'PUT', {

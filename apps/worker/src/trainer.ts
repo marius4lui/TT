@@ -890,6 +890,12 @@ export function registerTrainerRoutes(app: Hono<AppBindings>): void {
     if (value.privacyText)
       statements.push(c.env.DB.prepare("UPDATE settings SET value='1' WHERE key='privacy_ready'"));
     if (value.enabled === true) {
+      if (!value.privacyText && (await setting(c.env.DB, 'privacy_ready')) !== '1')
+        throw new TrainerError('privacy_required');
+      const selected = await c.env.DB.prepare(
+        "SELECT jid FROM groups WHERE jid=(SELECT value FROM settings WHERE key='selected_group') AND active=1",
+      ).first();
+      if (!selected) throw new TrainerError('group_approval_required');
       guards.push(
         guard(
           "EXISTS(SELECT 1 FROM groups WHERE jid=(SELECT value FROM settings WHERE key='selected_group') AND active=1)",
