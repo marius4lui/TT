@@ -156,7 +156,7 @@ try {
         'Die eigene Telefonnummer konnte nicht sicher aus Evolution gelesen werden. Instanzvertrag prüfen.',
       );
     const current = await api(`/webhook/find/${instance}`);
-    const webhook = current.webhook ?? current;
+    const webhook = current?.webhook ?? current ?? {};
     const target = `${origin}/webhooks/evolution`;
     if (webhook.enabled && webhook.url && webhook.url !== target && !args.has('--replace-webhook'))
       throw new Error(

@@ -232,7 +232,7 @@ export async function main() {
     )
       throw new SafeError('Unerwartetes Worker-Konfigurationsziel.');
     const webhook = await api(`/webhook/find/${encodeURIComponent(config.instance)}`);
-    const existing = webhook.webhook ?? webhook;
+    const existing = webhook?.webhook ?? webhook ?? {};
     if (existing.enabled && existing.url && existing.url !== 'https://tt.bz3.eu/webhooks/evolution')
       throw new SafeError(
         'Andere Anwendung nutzt den Instanz-Webhook. Kein Deployment oder Austausch vorgenommen.',

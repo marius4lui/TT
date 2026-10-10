@@ -175,7 +175,7 @@ app.get('/r/:id', async (c) => {
 app.get('*', async (c) => {
   const botJid = await setting(c.env.DB, 'bot_jid');
   const options = {
-    botName: await setting(c.env.DB, 'bot_name', 'Marius Bot'),
+    botName: await setting(c.env.DB, 'bot_name', 'TTBot'),
     infoText: await setting(c.env.DB, 'info_text'),
     privacyText: await setting(c.env.DB, 'privacy_text'),
     botNumber: botJid.endsWith('@s.whatsapp.net') ? botJid.split('@')[0] : '',

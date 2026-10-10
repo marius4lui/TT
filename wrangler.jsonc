@@ -12,13 +12,13 @@
   "d1_databases": [
     {
       "binding": "DB",
-      "database_name": "tt",
-      "database_id": "d4a78dfb-5fa4-49d5-a0ec-26a9e6cf26b9",
+      "database_name": "tt-production",
+      "database_id": "9a7fccd6-3335-4edc-bd00-a7a29e5203b4",
       "migrations_dir": "migrations",
     },
   ],
   "triggers": { "crons": ["* * * * *"] },
-  "vars": { "EVOLUTION_URL": "https://wa.kmuc.cc", "EVOLUTION_INSTANCE": "kmuc" },
+  "vars": { "EVOLUTION_URL": "https://wa.kmuc.cc", "EVOLUTION_INSTANCE": "TTBot" },
   "observability": { "enabled": true },
   "limits": { "cpu_ms": 30000 },
 }

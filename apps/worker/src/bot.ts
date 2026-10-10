@@ -35,7 +35,7 @@ interface Conversation {
   expires_at: number;
 }
 type Operation = { kind: string; [key: string]: unknown };
-const HELP = `🏓 TT – Marius Bot\n\nTeilnahme: Reagiere mit 👍 oder 👎 auf die Einladung. Verspätung: ⏰ auf die zweite Nachricht oder /spät TERMIN [MINUTEN].\n/ja TERMIN · /nein TERMIN · /pünktlich TERMIN\n/login – freiwilliges Konto\n/start · /stop – persönliche Erinnerungen\n/konto · /daten · /löschen\n\nTrainer (privat):\n/gruppen · /gruppe JID\n/training – Trainingsserie einrichten\n/termine · /übersicht [TERMIN]\n/ausfall DATUM\n/pause VON BIS\n/verschieben TERMIN DATUM UHRZEIT\n/sondertraining DATUM BEGINN ENDE [ORT]\n/serie beenden ID\n/info TEXT · /datenschutz TEXT\n/aktivieren · /deaktivieren · /status\n/admin – Adminverwaltung\n/bestätigen · /abbrechen`;
+const HELP = `🏓 TT – TTBot\n\nTeilnahme: Reagiere mit 👍 oder 👎 auf die Einladung. Verspätung: ⏰ auf die zweite Nachricht oder /spät TERMIN [MINUTEN].\n/ja TERMIN · /nein TERMIN · /pünktlich TERMIN\n/login – freiwilliges Konto\n/start · /stop – persönliche Erinnerungen\n/konto · /daten · /löschen\n\nTrainer (privat):\n/gruppen · /gruppe JID\n/training – Trainingsserie einrichten\n/termine · /übersicht [TERMIN]\n/ausfall DATUM\n/pause VON BIS\n/verschieben TERMIN DATUM UHRZEIT\n/sondertraining DATUM BEGINN ENDE [ORT]\n/serie beenden ID\n/info TEXT · /datenschutz TEXT\n/aktivieren · /deaktivieren · /status\n/admin – Adminverwaltung\n/bestätigen · /abbrechen`;
 const commandName = (s: string) =>
   s
     .toLocaleLowerCase('de')

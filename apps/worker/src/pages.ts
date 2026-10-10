@@ -63,7 +63,7 @@ export interface PageOptions {
 
 export function renderPage(path: string, options: PageOptions): string | null {
   const normalizedPath = path.length > 1 ? path.replace(/\/+$/, '') : path;
-  const botName = escapeHtml(options.botName || 'Marius Bot');
+  const botName = escapeHtml(options.botName || 'TTBot');
   const infoText = renderPlainText(options.infoText);
   const privacyText = renderPlainText(options.privacyText);
   const phone = String(options.botNumber ?? '').replace(/\D/g, '');
