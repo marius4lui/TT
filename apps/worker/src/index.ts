@@ -10,9 +10,11 @@ import { planJobs, sendOutbox } from './outbox';
 import { recordAttendance } from './bot';
 import { label, type Training } from './training';
 import { renderPage } from './pages';
+import { registerPracticeRoutes } from './practice';
 import { registerTrainerRoutes } from './trainer';
 import { registerGroupRequestRoutes } from './group-requests';
 import { planTrainerSummaries } from './trainer-summary';
+import { planLoginMessageEdits } from './login-messages';
 
 export const app = new Hono<AppBindings>();
 app.use(
@@ -84,24 +86,31 @@ app.post('/webhooks/evolution', async (c) => {
 });
 // Web edits commit durable jobs just like chat commands. Wake delivery immediately;
 // Cron remains the recovery path if this request's background work is interrupted.
-app.use('/api/v1/trainer/*', async (c, next) => {
+const deliveryAfterWrite: import('hono').MiddlewareHandler<AppBindings> = async (c, next) => {
   await next();
   if (
     !['GET', 'HEAD', 'OPTIONS'].includes(c.req.method) &&
+    c.req.path !== '/api/v1/trainer/practice/preview' &&
     c.res.status >= 200 &&
     c.res.status < 300 &&
     c.env.EVOLUTION_API_KEY
   ) {
     c.executionCtx.waitUntil(
-      dispatchPending(c.env).catch(() => {
+      (c.req.path.startsWith('/api/v1/trainer/practice')
+        ? sendOutbox(c.env, Date.now(), undefined, true)
+        : dispatchPending(c.env)
+      ).catch(() => {
         // Never log request bodies, provider errors, tokens or message text.
         console.error('TT: background delivery failed; scheduled recovery remains active.');
       }),
     );
   }
-});
+};
+app.use('/api/v1/trainer/*', deliveryAfterWrite);
+app.use('/api/v1/auth/magic/finish', deliveryAfterWrite);
 registerAuthRoutes(app);
 registerGroupRequestRoutes(app);
+registerPracticeRoutes(app);
 registerTrainerRoutes(app);
 // Operators running a modified version must point this at its corresponding source.
 app.get('/source', (c) => {
@@ -230,6 +239,7 @@ app.get('*', async (c) => {
 });
 
 export async function dispatchPending(env: Env, now = Date.now()): Promise<void> {
+  await planLoginMessageEdits(env.DB, now);
   await planJobs(env.DB, now);
   await planTrainerSummaries(env.DB, now);
   if (env.EVOLUTION_API_KEY) await sendOutbox(env, now);

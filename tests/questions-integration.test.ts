@@ -209,3 +209,57 @@ describe('question scope and bot routing', () => {
     expect(questionText(text)).toBeNull();
   });
 });
+
+describe('contextual short attendance replies in real training', () => {
+  async function report(text: string, timestamp: number, quotedId?: string) {
+    await processMessage(
+      env,
+      {
+        id: crypto.randomUUID(),
+        chatJid: group,
+        senderJid: user.jid,
+        aliases: [user.jid],
+        displayName: user.display_name,
+        timestamp,
+        isGroup: true,
+        text,
+        ...(quotedId ? { quotedId } : {}),
+      },
+      timestamp,
+    );
+  }
+  const response = () =>
+    db
+      .prepare("SELECT response FROM attendance WHERE session_id='current' AND user_id=?")
+      .bind(user.id)
+      .first('response');
+  it('turns Kann doch and ich kann into a yes after an own decline', async () => {
+    await report('Kann doch', now + 1000);
+    expect(await response()).toBeNull();
+    await report('Kann nicht', now + 2000);
+    expect(await response()).toBe('no');
+    await report('Kann doch', now + 3000);
+    expect(await response()).toBe('yes');
+    await report('Kann nicht', now + 4000);
+    await report('ich kann', now + 5000);
+    expect(await response()).toBe('yes');
+  });
+  it('never borrows context from unrelated quoted text or outdated training', async () => {
+    await report('Kann nicht', now + 1000);
+    await report('Kann doch', now + 2000, 'unrelated');
+    expect(await response()).toBe('no');
+    await db.prepare('UPDATE attendance SET needs_confirmation=1').run();
+    await report('Kann doch', now + 3000);
+    expect(await response()).toBe('no');
+  });
+  it('accepts a short reply to the current invitation without a prior answer', async () => {
+    await db
+      .prepare(
+        "INSERT INTO messages(id,chat_jid,session_id,session_version,kind,created_at) VALUES('current-invite',?,'current',1,'invite',?)",
+      )
+      .bind(group, now)
+      .run();
+    await report('Ich kann', now + 1000, 'current-invite');
+    expect(await response()).toBe('yes');
+  });
+});

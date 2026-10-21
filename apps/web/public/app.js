@@ -32,6 +32,12 @@
     error?.name === 'UserInputError'
       ? error.message
       : {
+          account_mismatch:
+            'Dieser Link gehört zu einem anderen Konto. Fordere für dein angemeldetes Konto eine neue Bestätigung an.',
+          practice_phone_required:
+            'TT kennt deine Telefonnummer noch nicht sicher. Schreibe dem Bot zunächst privat und versuche es erneut.',
+          practice_unconfirmed:
+            'Die Gruppe ist noch nicht sichtbar. Prüfe WhatsApp und versuche „Gruppe wiederfinden“ später erneut. Es wird keine zweite Gruppe erstellt.',
           invalid_link:
             'Dieser Anmeldelink ist ungültig oder wurde bereits verwendet. Fordere im privaten WhatsApp-Chat einen neuen Link an.',
           registration_required: 'Für diese Funktion brauchst du ein freiwilliges TT-Konto.',
@@ -95,7 +101,7 @@
       node.hidden = false;
       if (error?.status === 401) {
         const login = text('a', 'Erneut anmelden', 'error-login');
-        login.href = '/login';
+        login.href = error?.message === 'reauthentication_required' ? '/login?reauth=1' : '/login';
         node.append(document.createTextNode(' '), login);
       }
       node.setAttribute('tabindex', '-1');
@@ -210,23 +216,37 @@
 
   async function initLogin(root) {
     const token = location.hash.slice(1);
-    if (!token) {
+    const reauthenticate = new URLSearchParams(location.search).get('reauth') === '1';
+    // Remove the credential before requests, including visits with an existing session.
+    if (location.hash) history.replaceState(null, '', `${location.pathname}${location.search}`);
+    if (!reauthenticate) {
       try {
         const me = await api('/api/v1/me');
         updateNavigation(me);
-        if (me.user) location.replace(me.role ? '/trainer' : '/konto');
-      } catch {
-        /* A new visitor can request a link. */
+        if (me.user) {
+          location.replace(me.role ? '/trainer' : '/konto');
+          return;
+        }
+      } catch (error) {
+        if (error.status !== 401) {
+          showError($('[data-login-error]', root), error);
+          return;
+        }
       }
-      return;
+    } else {
+      const request = $('[data-login-request]', root);
+      if (request) {
+        const link = new URL(request.href);
+        link.searchParams.set('text', '/login neu');
+        request.href = link.href;
+        request.textContent = 'Neue Bestätigung in WhatsApp anfordern';
+      }
     }
+    if (!token) return;
     if (!/^[a-f0-9]{48}$/.test(token)) {
-      history.replaceState(null, '', `${location.pathname}${location.search}`);
       showError($('[data-login-error]', root), new Error('invalid_link'));
       return;
     }
-    // Remove the bearer token from the address bar before any other interaction.
-    history.replaceState(null, '', `${location.pathname}${location.search}`);
     const states = $$('[data-login-state]', root);
     const errorNode = $('[data-login-error]', root);
     const state = (name) =>
@@ -234,7 +254,14 @@
         node.hidden = node.dataset.loginState !== name;
       });
     try {
-      const preview = await post('/api/v1/auth/magic/preview', { token });
+      const preview = await post('/api/v1/auth/magic/preview', {
+        token,
+        ...(reauthenticate ? { reauthenticate: true } : {}),
+      });
+      if (preview.status === 'authenticated') {
+        location.replace(preview.redirect);
+        return;
+      }
       if (preview.status !== 'ready') throw new Error('invalid_link');
       const needsRegistration = Boolean(preview.registrationRequired && !preview.role);
       $('[data-preview-title]', root).textContent = preview.role
@@ -272,6 +299,7 @@
         try {
           const result = await post('/api/v1/auth/magic/finish', {
             token,
+            ...(reauthenticate ? { reauthenticate: true } : {}),
             ...(needsRegistration ? { consent: true } : {}),
           });
           $('[data-done-link]', root).href =
@@ -494,6 +522,116 @@
         feedback.hidden = true;
       }, 6500);
     };
+    let practice;
+    let practiceBusy = false;
+    const setPracticeBusy = (busy) => {
+      practiceBusy = busy;
+      for (const button of $$('[data-practice-action]', root))
+        button.disabled =
+          busy ||
+          (['late', 'move', 'cancel', 'stop'].includes(button.dataset.practiceAction) &&
+            practice?.phase !== 'active');
+    };
+    const practiceError = $('[data-practice-error]', root);
+    const loadPractice = async () => {
+      try {
+        const result = await api('/api/v1/trainer/practice');
+        practice = result.group;
+        const ready = practice?.status === 'ready';
+        const failed = practice?.status === 'failed';
+        $('[data-practice-status]', root).textContent = !practice
+          ? 'Deine Übungsgruppe ist noch nicht angelegt.'
+          : failed
+            ? 'WhatsApp hat die Gruppe nicht angelegt. Prüfe die Verbindung und versuche es erneut.'
+            : ready
+              ? practice.name +
+                (practice.phase === 'active' ? ' · Übung läuft' : ' · Bereit für eine neue Übung')
+              : 'Die Erstellung ist noch nicht bestätigt. Prüfe WhatsApp und tippe auf „Gruppe wiederfinden“.';
+        $('[data-practice-action="create"]', root).hidden = !!practice && !failed;
+        $('[data-practice-action="reconcile"]', root).hidden = !practice || ready || failed;
+        $('[data-practice-controls]', root).hidden = !ready;
+        for (const action of ['late', 'move', 'cancel', 'stop'])
+          $('[data-practice-action="' + action + '"]', root).disabled =
+            practiceBusy || practice?.phase !== 'active';
+        $('[data-practice-delivery]', root).textContent =
+          {
+            sent: 'Die Übungsnachricht wurde an WhatsApp übergeben.',
+            pending: 'Die Nachricht wird versendet. Gleich noch einmal aktualisieren.',
+            processing: 'Die Nachricht wird versendet.',
+            uncertain:
+              'WhatsApp hat den Versand nicht eindeutig bestätigt. Prüfe zuerst die Gruppe.',
+            failed: 'Die Nachricht konnte nicht zugestellt werden. Prüfe die WhatsApp-Verbindung.',
+            cancelled: 'Die vorherige Nachricht wurde verworfen.',
+            expired: 'Die Übungsnachricht ist abgelaufen.',
+          }[practice?.delivery] || '';
+        const list = $('[data-practice-participants]', root);
+        list.replaceChildren();
+        for (const participant of result.participants) {
+          const item = document.createElement('li');
+          item.textContent =
+            (participant.name || 'Teilnehmende Person') +
+            ': ' +
+            (participant.attendance === 'no'
+              ? 'Abgesagt'
+              : participant.attendance === 'unknown'
+                ? 'Noch offen'
+                : participant.late
+                  ? 'Kommt später' +
+                    (participant.minutes ? ' · ca. ' + participant.minutes + ' Minuten' : '')
+                  : 'Dabei');
+          list.append(item);
+        }
+        if (!result.participants.length) {
+          const item = document.createElement('li');
+          item.textContent = 'Noch keine Rückmeldungen in dieser Übung.';
+          list.append(item);
+        }
+      } catch (error) {
+        showError(practiceError, error);
+      }
+    };
+    root.addEventListener('click', async (event) => {
+      const button = event.target.closest('[data-practice-action]');
+      if (!button || practiceBusy) return;
+      const action = button.dataset.practiceAction;
+      setPracticeBusy(true);
+      practiceError.hidden = true;
+      try {
+        if (action === 'create') await post('/api/v1/trainer/practice/create', { confirm: true });
+        else if (action === 'reconcile') await post('/api/v1/trainer/practice/reconcile');
+        else if (action !== 'refresh')
+          await post('/api/v1/trainer/practice/action', { action, version: practice.version });
+        await loadPractice();
+      } catch (error) {
+        showError(practiceError, error);
+      } finally {
+        setPracticeBusy(false);
+      }
+    });
+    $('[data-practice-preview]', root).addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const form = event.currentTarget;
+      setBusy(form, true);
+      try {
+        const values = new FormData(form);
+        const result = await post('/api/v1/trainer/practice/preview', {
+          text: values.get('text'),
+          context: values.get('context'),
+        });
+        $('[data-practice-result]', form).textContent = {
+          yes: 'Zusage – du bist dabei.',
+          no: 'Absage – du kommst nicht.',
+          late: 'Verspätung' + (result.minutes ? ' – ca. ' + result.minutes + ' Minuten.' : '.'),
+          punctual: 'Du kommst pünktlich.',
+          uncertain: 'Nicht eindeutig: TT fragt nach und ändert keine Rückmeldung.',
+          none: 'Keine eindeutige Rückmeldung: TT ändert nichts.',
+        }[result.kind];
+      } catch (error) {
+        showError(practiceError, error);
+      } finally {
+        setBusy(form, false);
+      }
+    });
     const switchView = (name, focus = false) => {
       if (
         !views.some((panel) => panel.dataset.viewPanel === name) ||
@@ -515,7 +653,7 @@
         ? name === 'attendance' && attendanceReturn === 'overview'
           ? 'overview'
           : 'sessions'
-        : ['settings', 'admins'].includes(name)
+        : ['settings', 'admins', 'practice'].includes(name)
           ? 'more'
           : name;
       $$('.trainer-nav [data-view]', root).forEach((item) => {
@@ -530,6 +668,7 @@
           series: 'Woche für Woche.',
           requests: 'Eure Runde.',
           more: 'Dein TT.',
+          practice: 'Einfach ausprobieren.',
           settings: 'So läuft’s bei euch.',
           admins: 'Dein Trainerteam.',
           attendance: 'Wer ist dabei?',
@@ -537,6 +676,7 @@
       history.replaceState(null, '', '#' + (name === 'attendance' ? attendanceReturn : name));
       if (name === 'requests') loadRequests();
       if (name === 'admins') loadAdmins();
+      if (name === 'practice') loadPractice();
     };
     const groupName = (jid) =>
       overview?.groups?.find((group) => group.jid === jid)?.name ||

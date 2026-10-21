@@ -4,7 +4,7 @@ import { all, setting } from './db';
 import { consumeRateLimit, hashToken, randomToken } from './security';
 import { cookie, cookieHeader, getRole, getSession, SESSION_COOKIE } from './auth';
 
-const LINK_TTL = 10 * 60_000,
+const LINK_TTL = 5 * 60_000,
   SESSION_TTL = 7 * 86400000,
   FRESH_TTL = 15 * 60_000;
 const MAGIC_TOKEN = /^[a-f0-9]{48}$/;
@@ -37,7 +37,7 @@ const only = (value: Record<string, unknown>, keys: string[]) =>
 
 /** The outgoing reply is the only transient plaintext copy required for delivery.
  * Link authentication records contain digests only; root outbox clears sent replies. */
-export async function issueMagicLogin(ctx: BotContext): Promise<string[]> {
+export async function issueMagicLogin(ctx: BotContext, reauthenticate = false): Promise<string[]> {
   if (ctx.isGroup) return ['Bitte fordere deinen Anmeldelink im privaten Botchat an.'];
   const db = ctx.env.DB;
   if (await db.prepare('SELECT 1 FROM auth_magic_links WHERE event_id=?').bind(ctx.eventId).first())
@@ -54,7 +54,7 @@ export async function issueMagicLogin(ctx: BotContext): Promise<string[]> {
     ];
   const token = randomToken(24),
     tokenHash = await hashToken(token);
-  const message = `Dein Anmeldelink:\n${ctx.origin}/login#${token}\n\nEinmalig, zehn Minuten gültig. Nicht weiterleiten – der Link ermöglicht die Anmeldung.`;
+  const message = `Dein Anmeldelink:\n${ctx.origin}/login${reauthenticate ? '?reauth=1' : ''}#${token}\n\nEinmalig, fünf Minuten gültig. Nicht weiterleiten – der Link ermöglicht die Anmeldung.\n\nSchon angemeldet? Dein dauerhafter Zugang: ${ctx.origin}/login`;
   const results = await db.batch([
     db
       .prepare(
@@ -92,6 +92,11 @@ export async function issueMagicLogin(ctx: BotContext): Promise<string[]> {
         ctx.now,
         tokenHash,
       ),
+    db
+      .prepare(
+        "UPDATE outbox_jobs SET status='cancelled',text='' WHERE user_id=? AND status='pending' AND dedupe_key IN (SELECT 'reply:'||event_id||':0' FROM auth_magic_links WHERE user_id=? AND state='revoked')",
+      )
+      .bind(ctx.user.id, ctx.user.id),
   ]);
   return results[1].meta.changes === 1
     ? [message]
@@ -174,12 +179,26 @@ export function registerMagicAndAccountRoutes(app: Hono<AppBindings>): void {
     });
   app.post('/api/v1/auth/magic/preview', async (c) => {
     const value = await body(c);
-    if (!value || !only(value, ['token'])) return c.json({ error: 'invalid_input' }, 400);
+    if (
+      !value ||
+      !only(value, ['token', 'reauthenticate']) ||
+      (value.reauthenticate !== undefined && value.reauthenticate !== true)
+    )
+      return c.json({ error: 'invalid_input' }, 400);
+    const existing = await getSession(c.req.raw, c.env);
+    if (existing && !value.reauthenticate)
+      return c.json({
+        status: 'authenticated',
+        role: existing.role,
+        redirect: existing.role ? '/trainer' : '/konto',
+      });
     const ip = await hashToken(c.req.header('CF-Connecting-IP') ?? 'unknown');
     if (!(await consumeRateLimit(c.env.DB, `magic:preview:${ip}`, 60, 10 * 60_000, Date.now())))
       return c.json({ error: 'rate_limit' }, 429);
     const row = await magicRow(c, value.token);
     if (!row) return c.json({ error: 'invalid_link' }, 401);
+    if (existing && existing.user.id !== row.user_id)
+      return c.json({ error: 'account_mismatch' }, 403);
     const role = await getRole(c.env.DB, row.user_id);
     return c.json({
       status: 'ready',
@@ -195,16 +214,26 @@ export function registerMagicAndAccountRoutes(app: Hono<AppBindings>): void {
     const value = await body(c);
     if (
       !value ||
-      !only(value, ['token', 'consent']) ||
+      !only(value, ['token', 'consent', 'reauthenticate']) ||
+      (value.reauthenticate !== undefined && value.reauthenticate !== true) ||
       (value.consent !== undefined && value.consent !== true)
     )
       return c.json({ error: 'invalid_input' }, 400);
+    const existing = await getSession(c.req.raw, c.env);
+    if (existing && !value.reauthenticate)
+      return c.json({
+        ok: true,
+        role: existing.role,
+        redirect: existing.role ? '/trainer' : '/konto',
+      });
     const now = Date.now(),
       ip = await hashToken(c.req.header('CF-Connecting-IP') ?? 'unknown');
     if (!(await consumeRateLimit(c.env.DB, `magic:finish:${ip}`, 30, 10 * 60_000, now)))
       return c.json({ error: 'rate_limit' }, 429);
     const row = await magicRow(c, value.token);
     if (!row) return c.json({ error: 'invalid_link' }, 401);
+    if (existing && existing.user.id !== row.user_id)
+      return c.json({ error: 'account_mismatch' }, 403);
     const role = await getRole(c.env.DB, row.user_id),
       privacy = (await setting(c.env.DB, 'privacy_ready')) === '1';
     if (!role && row.registered_at === null) {
@@ -367,7 +396,7 @@ export function registerMagicAndAccountRoutes(app: Hono<AppBindings>): void {
     if (session instanceof Response) return session;
     const db = c.env.DB,
       id = session.user.id;
-    const [aliases, memberships, attendance, consents] = await Promise.all([
+    const [aliases, memberships, attendance, consents, practice] = await Promise.all([
       all(db, 'SELECT jid FROM identity_aliases WHERE user_id=?', id),
       all(db, 'SELECT group_jid,active,updated_at FROM memberships WHERE user_id=?', id),
       all(
@@ -376,6 +405,12 @@ export function registerMagicAndAccountRoutes(app: Hono<AppBindings>): void {
         id,
       ),
       all(db, 'SELECT purpose,version,accepted,created_at FROM consents WHERE user_id=?', id),
+      all(
+        db,
+        'SELECT group_id,version,display_name,state FROM practice_attendance WHERE sender_jid=? OR sender_jid IN (SELECT jid FROM identity_aliases WHERE user_id=?)',
+        session.user.jid,
+        id,
+      ),
     ]);
     return c.json({
       account: userView(session.user),
@@ -384,6 +419,7 @@ export function registerMagicAndAccountRoutes(app: Hono<AppBindings>): void {
       memberships,
       attendance,
       consents,
+      practice,
     });
   });
   app.post('/api/v1/account/delete', async (c) => {

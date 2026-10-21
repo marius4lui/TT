@@ -240,3 +240,47 @@ describe('account and management language', () => {
     ['Ich stimme zu', 'none'],
   ])('%s -> %s', (text, intent) => expect(chatIntent(text)).toBe(intent));
 });
+
+describe('short German corrections require training context', () => {
+  it.each([
+    'Kann doch',
+    'Ich kann',
+    'Ich kann doch!',
+    'Kann wieder',
+    'Ich schaffe es',
+    'Klappt doch',
+    'Es geht jetzt',
+    'Ｋａｎｎ doch',
+    'Kann\u00a0doch',
+  ])('resolves %s only with context', (text) => {
+    expect(attendanceIntent(text).kind).toBe('none');
+    expect(attendanceIntent(text, { hasTrainingContext: true }).kind).toBe('yes');
+  });
+  it.each(['Ich kann doch kommen', 'Kann am Training teilnehmen'])(
+    'understands an explicit attendance statement: %s',
+    (text) => {
+      expect(attendanceIntent(text).kind).toBe('yes');
+    },
+  );
+  it.each([
+    'Er kann doch',
+    'Ich kann den Schläger finden',
+    '„Ich kann doch“',
+    'Ich kann vielleicht',
+    'Kann doch?',
+    'Wenn ich kann',
+    'Ich kann morgen oder heute',
+    'Kann nächsten Mittwoch',
+    'Ich kann nicht',
+    'Ich kann doch nicht',
+  ])('never guesses yes for %s', (text) => {
+    expect(attendanceIntent(text, { hasTrainingContext: true }).kind).not.toBe('yes');
+  });
+  it.each([
+    'Ich komme fünf Minuten später',
+    'Ich komme fünf Minuten später',
+    'Ich komme fuenf Minuten spaeter',
+  ])('normalizes German characters in %s', (text) => {
+    expect(attendanceIntent(text)).toMatchObject({ kind: 'late', minutes: 5 });
+  });
+});

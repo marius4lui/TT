@@ -34,3 +34,9 @@ Maßgeblich sind `inbox.ts`, `outbox.ts` und die Kontolöschlogik. Backups und P
 Registrierung und persönliche Mitgliedererinnerungen benötigen getrennte ausdrückliche Zustimmung. Trainerübersichten sind ebenfalls freiwillig. `/konto` bietet Datenabruf, Einstellungen und Kontolöschung. Der letzte Owner kann nicht ohne Nachfolge entfernt werden.
 
 Persönliche Login-Links sind Zugangsnachweise. Wer einen gültigen Link besitzt und bestätigt, kann sich als die angezeigte Identität anmelden. Links deshalb nicht weiterleiten oder in Issues, Screenshots und Logs veröffentlichen. Eine neue Anforderung widerruft den alten offenen Link. Sessions und Token werden serverseitig durch Hashes geprüft; zustellbare Links befinden sich vorübergehend im privaten Versandauftrag.
+
+## Übungsgruppen
+
+Übungsrückmeldungen liegen getrennt in `practice_attendance`: WhatsApp-Absenderkennung, Anzeigename, Antwort und Ereigniszeitpunkte. Sie werden bei Neustart, Verschiebung, Absage und Ende entfernt; abgelaufene Runden werden im erfolgreichen Minutenlauf bereinigt. Bekannte eigene Kennungen sind im Kontoexport enthalten und werden bei Kontolöschung aus Übungsantworten entfernt. Die Gruppenzuordnung bleibt reserviert, damit spätere Nachrichten nicht versehentlich als echtes Training verarbeitet werden. Gesendete Übungsantworttexte werden sofort aus der Outbox geleert, andere abgeschlossene Übungstexte im Minutenlauf. WhatsApp und Evolution haben eigene Speicherfristen.
+
+Ein Login-Link gilt fünf Minuten ab Ausstellung. Eine gültige bestehende Sitzung wird beim erneuten Öffnen bevorzugt. Nach Nutzung, Widerruf oder Ablauf plant TT die Bearbeitung der ursprünglichen privaten Nachricht; der Versuch erfolgt innerhalb von 14 Minuten ab Ausstellung. Providerfehler oder ein ausgefallener Cron können die Bearbeitung verhindern. Die serverseitige Gültigkeit endet davon unabhängig. Schon die ursprüngliche Nachricht enthält zusätzlich den dauerhaften Zugang ohne Token.

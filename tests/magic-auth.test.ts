@@ -508,3 +508,80 @@ describe('web account consent and owner role management', () => {
     expect(await getSession(request, env)).toBeNull();
   });
 });
+
+describe('returning trainers and five-minute links', () => {
+  it('expires exactly five minutes after issue', async () => {
+    const { token, ctx, reply } = await issue(await user('491234567890', true));
+    expect(
+      await db.prepare('SELECT expires_at-created_at AS ttl FROM auth_magic_links').first('ttl'),
+    ).toBe(300000);
+    expect(reply!.join(' ')).toContain('fünf Minuten');
+    const clock = Date.now;
+    try {
+      Date.now = () => ctx.now + 300000;
+      expect((await req('/api/v1/auth/magic/preview', 'POST', { token })).status).toBe(401);
+      expect((await req('/api/v1/auth/magic/finish', 'POST', { token })).status).toBe(401);
+    } finally {
+      Date.now = clock;
+    }
+  });
+  it.each(['used', 'revoked', 'expired', 'malformed'])(
+    'keeps the cookie session when a %s link is reopened',
+    async (state) => {
+      const u = await user('491234567890', true, 'admin'),
+        { token } = await issue(u),
+        cookies = await session(u, 3600000);
+      if (state === 'expired') await db.prepare('UPDATE auth_magic_links SET expires_at=0').run();
+      else if (state !== 'malformed')
+        await db.prepare('UPDATE auth_magic_links SET state=?').bind(state).run();
+      const before = await db
+        .prepare('SELECT authenticated_at FROM auth_sessions')
+        .first('authenticated_at');
+      for (const action of ['preview', 'finish']) {
+        const result = await req(
+          '/api/v1/auth/magic/' + action,
+          'POST',
+          { token: state === 'malformed' ? 'broken' : token },
+          cookies,
+        );
+        expect(result.status).toBe(200);
+        expect(await result.json()).toMatchObject({ redirect: '/trainer', role: 'admin' });
+        expect(result.headers.get('Set-Cookie')).toBeNull();
+      }
+      expect(await db.prepare('SELECT COUNT(*) AS n FROM auth_sessions').first('n')).toBe(1);
+      expect(
+        await db.prepare('SELECT authenticated_at FROM auth_sessions').first('authenticated_at'),
+      ).toBe(before);
+    },
+  );
+  it('allows deliberate same-account reauthentication, but never silently switches accounts', async () => {
+    const u = await user('491234567890', true, 'admin'),
+      cookies = await session(u, 3600000);
+    const { token } = await issue(u);
+    const other = await issue(await user('491234567891', true));
+    expect(
+      (
+        await req(
+          '/api/v1/auth/magic/finish',
+          'POST',
+          { token: other.token, reauthenticate: true },
+          cookies,
+        )
+      ).status,
+    ).toBe(403);
+    const result = await req(
+      '/api/v1/auth/magic/finish',
+      'POST',
+      { token, reauthenticate: true },
+      cookies,
+    );
+    expect(result.status).toBe(200);
+    expect(result.headers.get('Set-Cookie')).toContain('__Host-tt-session');
+  });
+  it('provides an explicit reauthentication link from WhatsApp', async () => {
+    const reply = await handleAccountMessage(
+      context(await user('491234567890', true, 'admin'), '/login neu'),
+    );
+    expect(reply!.join(' ')).toMatch(/\/login\?reauth=1#[a-f0-9]{48}/);
+  });
+});

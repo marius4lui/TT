@@ -1,3 +1,4 @@
+import { isPracticeGroup } from './practice';
 import { Hono } from 'hono';
 import { z } from 'zod';
 import type { EvolutionClient, EvolutionGroup } from '@tt/whatsapp';
@@ -145,6 +146,7 @@ export async function observeBotGroup(
     await env.DB.prepare('SELECT jid FROM groups WHERE jid=? AND active=1').bind(groupJid).first()
   )
     return;
+  if (await isPracticeGroup(env.DB, groupJid)) return;
   const fingerprint = await hashToken(`membership:${groupJid}`);
   const previous = await env.DB.prepare(
     'SELECT id,status,expires_at FROM group_requests WHERE fingerprint=?',
@@ -155,6 +157,7 @@ export async function observeBotGroup(
   if (previous && !renew) return;
   if (!(await consumeRateLimit(env.DB, 'group-discovery', 10, 60000, now))) return;
   const group = (await client.fetchGroups()).find((g) => g.id === groupJid);
+  if (group && (await isPracticeGroup(env.DB, group.id, group.subject))) return;
   if (!group || !containsBot(group, await setting(env.DB, 'bot_jid'))) return;
   const id = previous?.id ?? crypto.randomUUID();
   const result = renew
@@ -252,6 +255,8 @@ export async function approveGroupRequest(
   const row = await env.DB.prepare('SELECT * FROM group_requests WHERE id=?')
     .bind(id)
     .first<RequestRow>();
+  if (row && (await isPracticeGroup(env.DB, row.group_jid, row.subject)))
+    throw new GroupRequestError('group_unavailable');
   if (!row || row.expires_at <= now) throw new GroupRequestError('request_expired');
   if (row.status === 'approved') return;
   const eligible = reconcile

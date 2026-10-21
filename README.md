@@ -8,6 +8,7 @@ TT organisiert Trainings, Zusagen, Absagen und Verspätungen für eure Tischtenn
 
 - Wöchentliche Serien und Einzeltermine, Verschiebungen, Absagen und Pausen.
 - Gruppenfreigabe, Teilnahmeübersicht und persönliche Trainerübersichten.
+- Trainerfreundliche [Übungsgruppe](docs/PRACTICE.md) mit getrennten Rückmeldungen und Textprobe.
 - Einmalige Anmeldelinks aus WhatsApp, aktuelle Rollenprüfung und freiwillige Erinnerungen.
 - Dauerhafte Eingangs- und Versandwarteschlangen mit Schutz vor mehrfacher Verarbeitung.
 - Sofortiger Versand fälliger Nachrichten nach Webänderungen; Minuten-Cron für geplante Erinnerungen und Wiederanlauf.

@@ -634,6 +634,8 @@ export async function handleAccountMessage(ctx: BotContext): Promise<string[] | 
   if (!accountCommand) return null;
   if (!(await consumeRateLimit(db, `account:${ctx.user.id}`, 30, 60_000, ctx.now)))
     return ['Bitte warte eine Minute, bevor du weitere Kontobefehle sendest.'];
+  if (command === '/login' && parts.length === 2 && parts[1].toLowerCase() === 'neu')
+    return issueMagicLogin(ctx, true);
   if (naturalLogin || (command === '/login' && !parts[1])) return issueMagicLogin(ctx);
   if (command === '/registrieren')
     return ctx.user.registered_at

@@ -1,3 +1,4 @@
+import { isPracticeGroup } from './practice';
 import { Hono, type Context } from 'hono';
 import { z } from 'zod';
 import { occurrence, parseDate, trainingDates } from '@tt/core';
@@ -325,7 +326,10 @@ export function registerTrainerRoutes(app: Hono<AppBindings>): void {
   router.post('/groups/refresh', async (c) => {
     const ctx = await context(c),
       provider = evolution(c.env),
-      groups = await provider.fetchGroups();
+      fetched = await provider.fetchGroups();
+    const groups: typeof fetched = [];
+    for (const group of fetched)
+      if (!(await isPracticeGroup(c.env.DB, group.id, group.subject))) groups.push(group);
     provider.fetchGroups = async () => groups; // One verified provider snapshot for this discovery pass.
     await commitTrainerMutation(
       ctx,

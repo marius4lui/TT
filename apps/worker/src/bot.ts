@@ -1,3 +1,4 @@
+import { processPracticeMessage } from './practice';
 import {
   normalizeEmoji,
   attendanceIntent,
@@ -1009,6 +1010,7 @@ export async function processMessage(
   event: MessageEvent & { credentialHash?: string },
   now = Date.now(),
 ): Promise<void> {
+  if (await processPracticeMessage(env, event, now)) return;
   if (event.isGroup) {
     if (
       (await setting(env.DB, 'enabled')) !== '1' ||
@@ -1274,11 +1276,14 @@ export async function processMessage(
       );
     return;
   }
-  const intent = attendanceIntent(ctx.text);
+  let intent = attendanceIntent(ctx.text);
+  const needsContext = intent.kind === 'none';
+  if (needsContext) intent = attendanceIntent(ctx.text, { hasTrainingContext: true });
   if (intent.kind === 'none') return;
+  let currentInvitation = false;
   if (event.quotedId && !intent.reference) {
     const quoted = await env.DB.prepare(
-      'SELECT m.session_id,m.session_version,s.version,m.user_id FROM messages m JOIN training_sessions s ON s.id=m.session_id WHERE m.id=? AND m.chat_jid=?',
+      'SELECT m.session_id,m.session_version,s.version,m.user_id,m.kind FROM messages m JOIN training_sessions s ON s.id=m.session_id WHERE m.id=? AND m.chat_jid=?',
     )
       .bind(event.quotedId, ctx.chatJid)
       .first<{
@@ -1286,6 +1291,7 @@ export async function processMessage(
         session_version: number;
         version: number;
         user_id: string | null;
+        kind: string;
       }>();
     if (quoted && (!quoted.user_id || quoted.user_id === user.id)) {
       if (quoted.version !== quoted.session_version) {
@@ -1296,7 +1302,12 @@ export async function processMessage(
         return;
       }
       intent.reference = quoted.session_id;
+      currentInvitation = ['invite', 'personal_invite', 'late', 'personal_late'].includes(
+        quoted.kind,
+      );
     }
+    // A reply to unrelated quoted text cannot borrow a previous training response.
+    if (needsContext && !currentInvitation) return;
   }
   const possible = (await upcoming(env.DB, now, event.isGroup ? event.chatJid : undefined)).filter(
     (t) =>
@@ -1311,7 +1322,7 @@ export async function processMessage(
               .toString()
           : t.start_at - 36 * 3600000 <= now),
   );
-  const mine = [] as Training[];
+  let mine = [] as Training[];
   for (const t of possible)
     if (
       await env.DB.prepare(
@@ -1321,6 +1332,19 @@ export async function processMessage(
         .first()
     )
       mine.push(t);
+  if (needsContext && !currentInvitation) {
+    const contextual: Training[] = [];
+    for (const t of mine) {
+      const prior = await env.DB.prepare(
+        "SELECT 1 FROM attendance WHERE session_id=? AND user_id=? AND response IN ('yes','no') AND needs_confirmation=0 AND response_at>=? AND response_at<?",
+      )
+        .bind(t.id, user.id, now - 24 * 3600000, ctx.timestamp)
+        .first();
+      if (prior) contextual.push(t);
+    }
+    if (!contextual.length) return;
+    mine = contextual;
+  }
   if (intent.kind === 'uncertain') {
     await reply(
       ctx,

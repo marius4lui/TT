@@ -343,3 +343,50 @@ describe('Evolution transport', () => {
     ]);
   });
 });
+
+describe('editing login messages and creating exercise groups', () => {
+  it('edits the original private message using the Evolution update contract', async () => {
+    const fetcher = vi.fn<typeof fetch>(
+      async () => new Response(JSON.stringify({ key: { id: 'edit-envelope' } })),
+    );
+    const c = new EvolutionClient({
+      url: 'https://provider.invalid',
+      instance: 'test',
+      apiKey: 'fixture',
+      fetch: fetcher,
+    });
+    expect(await c.editMessage('491701234567@s.whatsapp.net', 'original', 'Dein Zugang')).toEqual({
+      id: 'original',
+    });
+    expect(fetcher.mock.calls[0][0]).toBe('https://provider.invalid/chat/updateMessage/test');
+    expect(JSON.parse(fetcher.mock.calls[0][1]!.body as string)).toEqual({
+      number: '491701234567@s.whatsapp.net',
+      key: { remoteJid: '491701234567@s.whatsapp.net', id: 'original', fromMe: true },
+      text: 'Dein Zugang',
+    });
+    await expect(c.editMessage('1234@g.us', 'original', 'x')).rejects.toMatchObject({
+      kind: 'permanent',
+    });
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+  it('validates group creation response and does not guess on ambiguous outcomes', async () => {
+    const fetcher = vi.fn<typeof fetch>(
+      async () => new Response(JSON.stringify({ id: '123456@g.us' })),
+    );
+    const c = new EvolutionClient({
+      url: 'https://provider.invalid',
+      instance: 'test',
+      apiKey: 'fixture',
+      fetch: fetcher,
+    });
+    expect(await c.createGroup('TT Übung', '491701234567')).toEqual({ id: '123456@g.us' });
+    expect(JSON.parse(fetcher.mock.calls[0][1]!.body as string)).toMatchObject({
+      subject: 'TT Übung',
+      participants: ['491701234567'],
+    });
+    fetcher.mockResolvedValueOnce(new Response('{}'));
+    await expect(c.createGroup('TT Übung', '491701234567')).rejects.toMatchObject({
+      kind: 'ambiguous',
+    });
+  });
+});

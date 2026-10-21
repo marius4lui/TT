@@ -1,3 +1,4 @@
+import { isPracticeGroup } from './practice';
 import {
   normalizeControlWebhook,
   normalizeWebhook,
@@ -18,14 +19,17 @@ export async function acceptWebhook(env: Env, payload: unknown, now = Date.now()
   const controls = normalizeControlWebhook(payload, env.EVOLUTION_INSTANCE);
   let count = 0;
   for (const message of messages) {
+    const practice = message.isGroup && (await isPracticeGroup(env.DB, message.chatJid));
     if (
       message.isGroup &&
+      !practice &&
       ((await setting(env.DB, 'enabled')) !== '1' ||
         (await setting(env.DB, 'privacy_ready')) !== '1')
     )
       continue;
     if (
       message.isGroup &&
+      !practice &&
       !(await env.DB.prepare('SELECT jid FROM groups WHERE jid=? AND active=1')
         .bind(message.chatJid)
         .first())
@@ -75,6 +79,7 @@ export async function acceptWebhook(env: Env, payload: unknown, now = Date.now()
   return count;
 }
 async function processControl(env: Env, event: ControlEvent, now: number): Promise<void> {
+  if (event.kind === 'membership' && (await isPracticeGroup(env.DB, event.chatJid))) return;
   if (event.kind === 'connection') {
     await setSetting(env.DB, 'connection_state', event.state);
     return;
@@ -152,6 +157,18 @@ export async function drainInbox(env: Env, now = Date.now()): Promise<number> {
   return processed;
 }
 export async function cleanup(db: D1Database, now: number): Promise<void> {
+  await db
+    .prepare(
+      'DELETE FROM practice_attendance WHERE group_id IN (SELECT id FROM practice_groups WHERE expires_at<=? OR owner_id IS NULL)',
+    )
+    .bind(now)
+    .run();
+  await db
+    .prepare(
+      "UPDATE outbox_jobs SET text='' WHERE practice_id IS NOT NULL AND (expires_at<=? OR status IN ('sent','failed','uncertain','expired','cancelled'))",
+    )
+    .bind(now)
+    .run();
   const today = new Date(now).toISOString().slice(0, 10);
   if ((await setting(db, 'cleanup_date')) === today) return;
   const day = 86400000;

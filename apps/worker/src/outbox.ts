@@ -19,6 +19,9 @@ export interface Job {
   attempts: number;
   lease_token: string | null;
   preference_version: number | null;
+  practice_id?: string | null;
+  practice_version?: number | null;
+  target_message_id?: string | null;
 }
 export interface QueueInput {
   key: string;
@@ -182,6 +185,24 @@ export async function planJobs(db: D1Database, now: number): Promise<void> {
 }
 async function permitted(db: D1Database, j: Job, now: number): Promise<boolean> {
   if (j.expires_at <= now) return false;
+  if (j.practice_id) {
+    return !!(await db
+      .prepare(
+        `SELECT 1 FROM practice_groups p JOIN roles r ON r.user_id=p.owner_id WHERE p.id=? AND p.group_jid=? AND p.version=? AND p.status='ready' AND p.expires_at>? AND (p.phase='active' OR ?='practice_end')`,
+      )
+      .bind(j.practice_id, j.chat_jid, j.practice_version, now, j.kind)
+      .first());
+  }
+  if (j.kind.startsWith('practice_')) return false;
+  if (j.kind === 'login_edit') {
+    if (!j.target_message_id || j.chat_jid.endsWith('@g.us')) return false;
+    return !!(await db
+      .prepare(
+        "SELECT 1 FROM outbox_jobs WHERE provider_id=? AND chat_jid=? AND user_id=? AND kind='reply' AND status='sent'",
+      )
+      .bind(j.target_message_id, j.chat_jid, j.user_id)
+      .first());
+  }
   if (j.session_id) {
     if ((await setting(db, 'enabled')) !== '1' || (await setting(db, 'privacy_ready')) !== '1')
       return false;
@@ -276,6 +297,7 @@ export async function sendOutbox(
   env: Env,
   now = Date.now(),
   client = evolution(env),
+  practiceOnly = false,
 ): Promise<number> {
   // A crashed sender might already have reached WhatsApp. Do not blindly send it again.
   await env.DB.prepare(
@@ -290,9 +312,10 @@ export async function sendOutbox(
     .run();
   const candidates = await all<Job>(
     env.DB,
-    "SELECT * FROM outbox_jobs WHERE status='pending' AND due_at<=? AND expires_at>? ORDER BY due_at,created_at LIMIT 15",
+    "SELECT * FROM outbox_jobs WHERE status='pending' AND due_at<=? AND expires_at>? AND (?=0 OR practice_id IS NOT NULL) ORDER BY due_at,created_at LIMIT 15",
     now,
     now,
+    practiceOnly ? 1 : 0,
   );
   let sent = 0;
   for (const candidate of candidates) {
@@ -313,7 +336,9 @@ export async function sendOutbox(
       let result: { id: string };
       let seedClock = false;
       let clockExpires = j.expires_at;
-      if (['clock', 'personal_clock'].includes(j.kind)) {
+      if (j.kind === 'login_edit') {
+        result = await client.editMessage(j.chat_jid, j.target_message_id!, j.text);
+      } else if (['clock', 'personal_clock'].includes(j.kind)) {
         result = await client.sendReaction(j.chat_jid, j.text, '⏰');
       } else if (j.kind === 'contact') {
         const card = JSON.parse(j.text) as { name: string; phone: string };
@@ -377,7 +402,7 @@ export async function sendOutbox(
       };
       await env.DB.batch([
         env.DB.prepare(
-          "UPDATE outbox_jobs SET status='sent',provider_id=?,error=NULL,text=CASE WHEN kind IN ('reply','contact') THEN '' ELSE text END WHERE id=? AND lease_token=? AND status='processing'",
+          "UPDATE outbox_jobs SET status='sent',provider_id=?,error=NULL,text=CASE WHEN kind IN ('reply','contact','login_edit','practice_reply') THEN '' ELSE text END WHERE id=? AND lease_token=? AND status='processing'",
         ).bind(result.id, j.id, token),
         env.DB.prepare(
           'INSERT OR IGNORE INTO messages(id,chat_jid,session_id,session_version,kind,user_id,created_at) VALUES(?,?,?,?,?,?,?)',

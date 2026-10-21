@@ -27,7 +27,9 @@ const webhookToken = randomBytes(32).toString('hex'),
 const hash = (value) => createHash('sha256').update(value).digest('hex');
 const quote = (value) => `'${String(value).replaceAll("'", "''")}'`;
 const children = new Set(),
-  sent = [];
+  sent = [],
+  loginEdits = [],
+  practiceGroups = [];
 let provider,
   worker,
   origin,
@@ -213,9 +215,25 @@ try {
         sent.push({ ...data, id, path: request.url });
         response.statusCode = 201;
         response.end(JSON.stringify({ key: { id } }));
+      } else if (request.method === 'POST' && request.url === `/chat/updateMessage/${instance}`) {
+        check(
+          sent.some((message) => message.id === data.key.id && message.number === data.number),
+          'edit_target_missing',
+        );
+        loginEdits.push(data);
+        response.end(JSON.stringify({ key: { id: `edit-${randomUUID()}` } }));
+      } else if (request.method === 'POST' && request.url === `/group/create/${instance}`) {
+        const group = {
+          id: `120363${Date.now()}@g.us`,
+          subject: data.subject,
+          participants: [{ id: ownerJid }, { id: botJid }],
+        };
+        practiceGroups.push(group);
+        response.end(JSON.stringify(group));
       } else if (request.url === `/group/fetchAllGroups/${instance}?getParticipants=true`) {
         response.end(
           JSON.stringify([
+            ...practiceGroups,
             {
               id: groupJid,
               subject: 'TT lokale Smokegruppe',
@@ -642,6 +660,50 @@ SELECT COUNT(*) AS n FROM messages WHERE kind='invite' AND chat_jid=${quote(grou
     check(!/https?:|Powered|\/r\//.test(combined.text), 'repeated_links');
     progress('one combined last-minute message and native clock reaction verified');
   }
+  for (let attempt = 0; attempt < 20 && loginEdits.length < 2; attempt++) await pause(100);
+  check(
+    loginEdits.length >= 2 &&
+      loginEdits.every(
+        (edit) => edit.text.includes(origin + '/login') && !/#[a-f0-9]{48}/.test(edit.text),
+      ),
+    'login_message_edit_missing',
+  );
+  stage = 'login edits and isolated practice';
+  const createdPractice = await api(
+    '/api/v1/trainer/practice/create',
+    'POST',
+    { confirm: true },
+    trainerCookie,
+  );
+  check(createdPractice.status === 200 && practiceGroups.length === 1, 'practice_creation_failed');
+  await api('/api/v1/trainer/practice/create', 'POST', { confirm: true }, trainerCookie);
+  check(practiceGroups.length === 1, 'practice_group_duplicated');
+  check(
+    (
+      await api(
+        '/api/v1/trainer/practice/action',
+        'POST',
+        { action: 'start', version: 0 },
+        trainerCookie,
+      )
+    ).status === 200,
+    'practice_start_failed',
+  );
+  const sentence = await api(
+    '/api/v1/trainer/practice/preview',
+    'POST',
+    { text: 'Kann doch', context: 'no' },
+    trainerCookie,
+  );
+  check(
+    sentence.status === 200 && (await sentence.json()).kind === 'yes',
+    'practice_preview_failed',
+  );
+  const livePractice = (
+    await sql(`SELECT COUNT(*) AS n FROM groups WHERE jid=${quote(practiceGroups[0].id)};`)
+  )[0];
+  check(livePractice.results[0].n === 0, 'practice_leaked_into_live_groups');
+  progress('login-message edits and isolated practice creation verified');
   progress('PASS — local Worker, D1, cron, Evolution mock, reactions and authentication');
   if (process.argv.includes('--browser')) {
     // Hold the exact tested Worker/D1 for authorized browser acceptance; no UI mocks

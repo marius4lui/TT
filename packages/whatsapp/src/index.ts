@@ -351,6 +351,24 @@ export class EvolutionClient {
     });
   }
 
+  async editMessage(chatJid: string, messageId: string, text: string): Promise<{ id: string }> {
+    if (
+      !normalizeJid(chatJid) ||
+      chatJid.endsWith('@g.us') ||
+      !messageId ||
+      messageId.length > 200 ||
+      !text ||
+      text.length > 8000
+    )
+      throw new TransportError('permanent');
+    await this.send(`/chat/updateMessage/${this.instance}`, {
+      number: chatJid,
+      key: { remoteJid: chatJid, id: messageId, fromMe: true },
+      text,
+    });
+    return { id: messageId };
+  }
+
   async sendContact(chatJid: string, name: string, phone: string): Promise<{ id: string }> {
     const digits = phone.replace(/^\+/, '');
     if (!normalizeJid(chatJid) || !name || !/^\d{7,15}$/.test(digits))
@@ -373,6 +391,22 @@ export class EvolutionClient {
   async connectionState(): Promise<{ state: ConnectionState }> {
     const result = object(await this.request(`/instance/connectionState/${this.instance}`));
     return { state: connection(object(result?.instance)?.state ?? result?.state) };
+  }
+
+  async createGroup(subject: string, phone: string): Promise<{ id: string }> {
+    if (!subject || subject.length > 100 || !/^\d{7,15}$/.test(phone))
+      throw new TransportError('permanent');
+    const result = object(
+      await this.request(`/group/create/${this.instance}`, {
+        subject,
+        participants: [phone],
+        description:
+          'TT-Übungsgruppe. Rückmeldungen werden nur für Übungen verarbeitet und nach spätestens 24 Stunden gelöscht. Keine echten Trainingstermine. Bitte nur informierte Testpersonen hinzufügen.',
+      }),
+    );
+    const id = normalizeJid(result?.id);
+    if (!id?.endsWith('@g.us')) throw new TransportError('ambiguous');
+    return { id };
   }
 
   async fetchGroups(): Promise<EvolutionGroup[]> {

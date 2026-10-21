@@ -31,8 +31,31 @@ export type AttendanceIntent = {
   day?: 'today' | 'tomorrow';
   reference?: string;
 };
-export function attendanceIntent(input: string): AttendanceIntent {
-  return parseAttendance(input, true);
+export function attendanceIntent(
+  input: string,
+  context: { hasTrainingContext?: boolean } = {},
+): AttendanceIntent {
+  const parsed = parseAttendance(input, true);
+  if (parsed.kind !== 'none' || !context.hasTrainingContext) return parsed;
+  const text = stripCorrection(normalizeLanguage(input));
+  // Complete elliptical replies only. Never infer attendance from an object,
+  // question, quote, conditional, or third-person statement.
+  if (
+    /^(?:(?:ich\s+)?kann(?:\s+(?:heute|morgen|doch|wieder|nun|jetzt))*(?:\s+wieder)?|(?:ich\s+)?schaffe\s+(?:es|das)(?:\s+(?:heute|morgen|doch|wieder|nun|jetzt))*|(?:es\s+)?(?:klappt|geht)(?:\s+(?:heute|morgen|doch|wieder|nun|jetzt))*)[.!]*$/.test(
+      text,
+    )
+  ) {
+    if (/\bheute\b/.test(text) && /\bmorgen\b/.test(text)) return { kind: 'uncertain' };
+    return {
+      kind: 'yes',
+      ...(/\bmorgen\b/.test(text)
+        ? { day: 'tomorrow' as const }
+        : /\bheute\b/.test(text)
+          ? { day: 'today' as const }
+          : {}),
+    };
+  }
+  return parsed;
 }
 
 // These are discourse markers, never a response on their own. In particular,
@@ -396,6 +419,12 @@ function parseAttendance(input: string, compose: boolean): AttendanceIntent {
     });
   }
   if (negative) return { kind: 'none' };
+  if (
+    /^(?:ich\s+)?kann\s+(?:(?:heute|morgen|doch|wieder|nun|jetzt)\s+)*(?:(?:zum|ins|am)\s+training\s+)?(?:kommen|teilnehmen|mitmachen|dabei\s+sein)[.!]*$/.test(
+      text,
+    )
+  )
+    return result('yes');
   if (
     /^(?:(?:heute|morgen)\s+)?(?:komme\s+ich|bin\s+ich\s+(?:mit\s+)?dabei)[.! ]*$|^(?:ich\s+)?sage\s+(?:heute\s+|morgen\s+)?zu[.! ]*$|^(?:ich\s+)?bin\s+(?:(?:heute|morgen)\s+)?mit\s+dabei[.! ]*$/.test(
       text,

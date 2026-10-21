@@ -2,7 +2,15 @@
 
 ## Unreleased
 
+### Neu
+
+- Eigene Übungsgruppe pro Trainerperson unter Mehr: Gruppenanlage, Einladung, Verspätung, Verschiebung, Absage und Textprobe mit isolierten Rückmeldungen.
+
 ### Behoben
+
+- Kurze deutsche Antworten wie „Kann doch“ und „ich kann“ nutzen eine aktuelle eigene Rückmeldung oder die direkt beantwortete Einladung als Kontext. Fragen, Unsicherheit und Aussagen über andere Personen werden nicht zu Zusagen umgedeutet.
+- Bestehende Browsersitzungen öffnen auch benutzte oder abgelaufene Login-Links ohne erneute Anmeldung. Für geschützte Aktionen gibt es eine ausdrückliche Neuanmeldung mit `/login neu`.
+- Einmal-Links gelten fünf Minuten. Nach Nutzung oder Ablauf wird die ursprüngliche private Nachricht innerhalb des Provider-Bearbeitungsfensters durch einen dauerhaften Zugangslink ersetzt; unklare Bearbeitungen werden nicht als neue Nachricht wiederholt.
 
 - Erfolgreiche Änderungen im Trainer-Web starten Planung und Versand im Worker-Hintergrund. Terminänderungen warten dadurch nicht mehr auf die nächste WhatsApp-Nachricht oder den nächsten Cron.
 - Fehlgeschlagene oder lesende Traineranfragen starten keinen Versand; Pausen und unklare Provider-Schreibausgänge werden weiterhin respektiert.
@@ -16,3 +24,5 @@
 - Neutrale Testdomains; neue Datenbanken übernehmen keine Adresse einer bestehenden Installation.
 
 Die Produktionskonfiguration vor dem Update aus der bisherigen `wrangler.jsonc` in `wrangler.production.jsonc` übernehmen. Die bestehende D1, Owner-Einrichtung und gespeicherte Origin bleiben bei einem normalen Update erhalten. Die Änderung der Startwerte in Migration 0001 wirkt nur bei neu angelegten Datenbanken.
+
+Für dieses Update zusätzlich die Migrationen 0008 und 0009 vor dem Worker-Deployment anwenden. Die Bearbeitung von WhatsApp-Nachrichten und Gruppenanlage auf der eigenen Evolution-Version anhand der Abnahmeliste prüfen.

@@ -17,7 +17,7 @@ Die folgenden Punkte sind die verbleibende Abnahme, keine Behauptung bereits erf
 
 - [ ] Privat „anmelden“ und `/login` liefern je einen persönlichen Link; doppelte Webhook-Ereignisse erzeugen keine mehrfachen Antworten.
 - [ ] Linkvorschau meldet nicht an und verbraucht den Link nicht. Die Website zeigt die Identität und verlangt einen ausdrücklichen Klick.
-- [ ] Link läuft nach zehn Minuten ab, ist nach erfolgreicher Anmeldung nicht wiederverwendbar und wird durch einen neu angeforderten Link widerrufen. Zwei gleichzeitige Abschlüsse erzeugen höchstens eine neue Session.
+- [ ] Link läuft nach fünf Minuten ab, kann danach keine neue Sitzung erzeugen und wird durch einen neu angeforderten Link widerrufen. Zwei gleichzeitige Abschlüsse erzeugen höchstens eine neue Session.
 - [ ] Der Link ist ein Zugangsnachweis: Ein Besitzer könnte die angezeigte Identität bestätigen. Hinweis „nicht weiterleiten“ ist sichtbar; keine Behauptung einer Bindung an den ursprünglichen Browser oder Empfänger beim neuen Linkablauf.
 - [ ] Trainer mit aktueller Owner-/Admin-Rolle gelangen direkt nach `/trainer`, ohne Teilnehmerregistrierung und ohne automatische Mitgliedererinnerungen.
 - [ ] Unregistrierte Mitglieder können Teilnahme ohne Webkonto melden. Freiwillige Registrierung und persönliche Mitgliedererinnerungen werden auf der Website getrennt bestätigt; Widerruf sperrt auch geplante persönliche Aufträge.
@@ -63,3 +63,11 @@ Die folgenden Punkte sind die verbleibende Abnahme, keine Behauptung bereits erf
 ## Freigabeentscheidung
 
 Regulären Nachrichtenbetrieb erst nach erfolgreicher Abnahme der kritischen Fälle mit echten Geräten und ausdrücklicher Freigabe durch Betreiber und verantwortliche Stelle aktivieren. Nicht getestete oder vom Provider nicht unterstützte Fälle bleiben als Einschränkung dokumentiert. Ältere Chatbefehle und der frühere browsergebundene Code-Login sind Kompatibilitätsfunktionen; ihre Tests belegen den neuen persönlichen Linkablauf nicht.
+
+## Übung, kurze Antworten und wiederkehrende Anmeldung
+
+- [ ] „Kann nicht“ und danach „Kann doch“ / „ich kann“ ändern die eigene Antwort korrekt. Ohne vorherige Antwort oder direkte Antwort auf die aktuelle Einladung wird eine kurze Zusage nicht geraten. Veraltete Einladungen und Antworten über andere Personen bleiben ausgeschlossen.
+- [ ] Die [Übungsgruppe](PRACTICE.md) lässt sich anlegen. Einladung, Verspätung, Verschiebung, Absage und Reaktionsrücknahme funktionieren ohne Änderungen an normalen Trainingsdaten.
+- [ ] Ein bereits angemeldeter Browser öffnet auch einen benutzten, abgelaufenen oder unvollständigen Login-Link direkt im bestehenden Konto. Eine explizite frische Bestätigung für Rollenaktionen bleibt möglich.
+- [ ] Nach Nutzung wird die ursprüngliche WhatsApp-Login-Nachricht bearbeitet und zeigt den dauerhaften Zugang. Nach ungenutztem Ablauf geschieht dies durch den nächsten Minutenlauf. Es erscheint keine zweite private Login-Nachricht.
+- [ ] Die installierte Evolution-Version unterstützt `POST /chat/updateMessage/{instance}` mit `number`, eigener Nachrichten-`key` und `text`. Auf echten Endgeräten innerhalb des WhatsApp-Bearbeitungsfensters prüfen.
