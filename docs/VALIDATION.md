@@ -16,3 +16,5 @@ Geprüft mit Node.js 24.19.0; die frische Installation wurde mit pnpm 11.9.0 gep
 Nicht durch diese Prüfung abgedeckt: neues Cloudflare-Konto, echte Evolution-Version, WhatsApp-Endgeräte, Browser-/Barrierefreiheitsabnahme, produktiver Cronzustand und Wiederherstellung echter Daten. Dafür [ACCEPTANCE.md](ACCEPTANCE.md) auf der eigenen Installation ausfüllen. Historische private Betriebsprotokolle wurden aus dieser Datei entfernt; sie bleiben in älteren Git-Revisionen enthalten.
 
 Ein Live-Deployment wurde hier nicht ausgeführt: Wrangler hat keine authentifizierte Cloudflare-Verbindung. Die GitHub-Sichtbarkeit wurde nicht geändert.
+
+GitHub-CI für Commit `ae8aa74`: [Lauf 39569615781](https://github.com/marius4lui/TT/actions/runs/39569615781) startete die Prüfungen nicht. GitHub meldet fehlgeschlagene Kontozahlungen oder ein zu niedriges Ausgabenlimit. Das ist kein fehlgeschlagener Anwendungstest; die Linux-Prüfungen wurden lokal erfolgreich ausgeführt, der Windows-Job bleibt unbestätigt.
