@@ -46,3 +46,5 @@ Vollständige Typprüfung, 844 Vitest-Tests in 30 Dateien, neun Operator-Tests u
 Der vollständige lokale Smoke mit Worker/D1/Evolution-Mock prüft zusätzlich den Chatbefehl, die historische Terminliste und eine Korrektur mit anschließend veränderter Rangliste bei unveränderter ursprünglicher Zusage. Der [Implementierungsplan](STATS-PLAN.md) beschreibt Semantik, Grenzen und Datenhaltung.
 
 Chromium mit lokalem Worker: historische Termine öffnen, Korrektur setzen und zurückstellen, gespeicherten Zustand nach Neuladen prüfen; Desktop sowie 390/320 Pixel breite Ansichten ohne horizontalen Überlauf.
+
+Quellstand `f48afdc` wurde nach Datenbanksicherung mit Migration `0010_statistics.sql` als Worker-Version `2e531412-127d-4a94-8519-5abb12d48fe3` ausgerollt. Cloudflare bestätigt die Migration. Live-Prüfung im Chromium-Browser: Health `ok`, Login und Trainerbereich erreichbar, ausgeliefertes JavaScript stimmt mit dem geprüften Stand überein. Der [CI-Lauf](https://github.com/marius4lui/TT/actions/runs/39600348988) war zum Zeitpunkt der Live-Prüfung noch aktiv. Echte Gruppen wurden bei dieser Abnahme nicht angeschrieben.
