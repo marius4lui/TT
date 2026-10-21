@@ -722,6 +722,49 @@ SELECT COUNT(*) AS n FROM messages WHERE kind='invite' AND chat_jid=${quote(grou
     'practice_invitation_failed',
   );
   progress('login-message edits, isolated practice creation and trainer invite link verified');
+  stage = 'statistics and optional historical correction';
+  const statsNow = Date.now();
+  await sql(`INSERT INTO training_sessions(id,group_jid,local_date,start_at,end_at,timezone,location,invite_at,late_at,created_at)
+    VALUES('smoke-history',${quote(groupJid)},'2026-01-01',${statsNow - 86400000},${statsNow - 82800000},'Europe/Berlin','Smokehalle',${statsNow - 90000000},${statsNow - 86460000},${statsNow});
+    INSERT INTO attendance(session_id,user_id,response,updated_at)
+    SELECT 'smoke-history',id,'yes',${statsNow} FROM users WHERE jid=${quote(memberJid)};`);
+  const statsBefore = await command(memberJid, '/stats 6 Monate', 'Trainingsstatistik');
+  check(
+    statsBefore.text.includes('Nach Zusagen') && statsBefore.text.includes('1.'),
+    'statistics_ranking_missing',
+  );
+  const historical = await api('/api/v1/trainer/history', 'GET', undefined, trainerCookie);
+  check(
+    historical.ok && (await historical.json()).sessions.some((s) => s.id === 'smoke-history'),
+    'history_missing',
+  );
+  const rosterResponse = await api(
+    '/api/v1/trainer/sessions/smoke-history/presence',
+    'GET',
+    undefined,
+    trainerCookie,
+  );
+  const roster = await rosterResponse.json();
+  const member = roster.participants.find((p) => p.response === 'yes');
+  check(!!member, 'history_member_missing');
+  const corrected = await api(
+    `/api/v1/trainer/sessions/smoke-history/presence/${member.userId}`,
+    'POST',
+    {
+      sessionVersion: roster.session.version,
+      expectedUpdatedAt: member.updatedAt,
+      state: 'absent',
+    },
+    trainerCookie,
+  );
+  check(corrected.ok, 'history_correction_failed');
+  const statsAfter = await command(memberJid, '/stats 6 Monate', 'Trainingsstatistik');
+  check(statsAfter.text.includes('Keine zählbaren'), 'statistics_correction_ignored');
+  const original = (
+    await sql(`SELECT response FROM attendance WHERE session_id='smoke-history';`)
+  )[0].results[0];
+  check(original.response === 'yes', 'history_correction_changed_rsvp');
+  progress('statistics ranking, historical correction and unchanged RSVP verified');
   progress('PASS — local Worker, D1, cron, Evolution mock, reactions and authentication');
   if (process.argv.includes('--browser')) {
     // Hold the exact tested Worker/D1 for authorized browser acceptance; no UI mocks

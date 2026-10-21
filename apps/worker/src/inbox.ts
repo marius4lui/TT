@@ -213,7 +213,12 @@ export async function cleanup(db: D1Database, now: number): Promise<void> {
       .prepare(
         'DELETE FROM attendance WHERE session_id IN (SELECT id FROM training_sessions WHERE end_at<?)',
       )
-      .bind(now - 90 * day),
+      .bind(now - 400 * day),
+    db
+      .prepare(
+        'DELETE FROM session_presence WHERE session_id IN (SELECT id FROM training_sessions WHERE end_at<?)',
+      )
+      .bind(now - 400 * day),
     db.prepare('DELETE FROM messages WHERE created_at<?').bind(now - 90 * day),
     db.prepare('DELETE FROM audit_log WHERE created_at<?').bind(now - 180 * day),
   ]);

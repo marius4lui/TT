@@ -3,6 +3,7 @@ import type { Env } from './types';
 import { all, setting } from './db';
 import { label, materialize, type Training } from './training';
 import { renderTrainerSummary, type SummaryRow } from './trainer-summary';
+import { renderGroupStatistics } from './statistics';
 
 export interface Job {
   id: string;
@@ -183,6 +184,21 @@ export async function planJobs(db: D1Database, now: number): Promise<void> {
     }
   }
 }
+function statisticsPayload(job: Job): { groupJid: string; months?: 1 | 6 | 12 } | null {
+  try {
+    const value = JSON.parse(job.text);
+    if (
+      !value ||
+      typeof value !== 'object' ||
+      !/^\d+(?:-\d+)?@g\.us$/.test(value.groupJid) ||
+      ![null, 1, 6, 12].includes(value.months)
+    )
+      return null;
+    return { groupJid: value.groupJid, months: value.months ?? undefined };
+  } catch {
+    return null;
+  }
+}
 async function permitted(db: D1Database, j: Job, now: number): Promise<boolean> {
   if (j.expires_at <= now) return false;
   if (j.practice_id) {
@@ -194,6 +210,21 @@ async function permitted(db: D1Database, j: Job, now: number): Promise<boolean> 
       .first());
   }
   if (j.kind.startsWith('practice_')) return false;
+  if (j.kind === 'statistics') {
+    const payload = statisticsPayload(j);
+    if (!payload || !j.user_id || (await setting(db, 'privacy_ready')) !== '1') return false;
+    return !!(await db
+      .prepare(
+        `SELECT 1 FROM memberships m
+      JOIN groups g ON g.jid=m.group_jid AND g.active=1
+      JOIN users u ON u.id=m.user_id
+      WHERE m.group_jid=? AND m.user_id=? AND m.active=1
+      AND NOT EXISTS(SELECT 1 FROM practice_groups p WHERE p.group_jid=g.jid)
+      AND (?=g.jid OR ?=u.jid OR EXISTS(SELECT 1 FROM identity_aliases a WHERE a.user_id=u.id AND a.jid=?))`,
+      )
+      .bind(payload.groupJid, j.user_id, j.chat_jid, j.chat_jid, j.chat_jid)
+      .first());
+  }
   if (j.kind === 'login_edit') {
     if (!j.target_message_id || j.chat_jid.endsWith('@g.us')) return false;
     return !!(await db
@@ -345,6 +376,11 @@ export async function sendOutbox(
         result = await client.sendContact(j.chat_jid, card.name, card.phone);
       } else {
         let text = j.text;
+        if (j.kind === 'statistics') {
+          const payload = statisticsPayload(j);
+          if (!payload) throw new TransportError('permanent');
+          text = await renderGroupStatistics(env.DB, payload.groupJid, now, payload.months);
+        }
         if (
           j.session_id &&
           ['invite', 'personal_invite', 'late', 'personal_late', 'trainer_summary'].includes(j.kind)
@@ -402,7 +438,7 @@ export async function sendOutbox(
       };
       await env.DB.batch([
         env.DB.prepare(
-          "UPDATE outbox_jobs SET status='sent',provider_id=?,error=NULL,text=CASE WHEN kind IN ('reply','contact','login_edit','practice_reply') THEN '' ELSE text END WHERE id=? AND lease_token=? AND status='processing'",
+          "UPDATE outbox_jobs SET status='sent',provider_id=?,error=NULL,text=CASE WHEN kind IN ('reply','contact','login_edit','practice_reply','statistics') THEN '' ELSE text END WHERE id=? AND lease_token=? AND status='processing'",
         ).bind(result.id, j.id, token),
         env.DB.prepare(
           'INSERT OR IGNORE INTO messages(id,chat_jid,session_id,session_version,kind,user_id,created_at) VALUES(?,?,?,?,?,?,?)',

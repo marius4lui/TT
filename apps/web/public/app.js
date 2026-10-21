@@ -464,6 +464,7 @@
     let attendanceFilter = 'all';
     let attendanceQuery = '';
     let attendanceReturn = 'overview';
+    let presenceData = null;
     let currentView = 'overview';
     let renderGeneration = 0;
     const timeLabel = (value) =>
@@ -705,7 +706,7 @@
         ? name === 'attendance' && attendanceReturn === 'overview'
           ? 'overview'
           : 'sessions'
-        : ['settings', 'admins', 'practice'].includes(name)
+        : ['settings', 'admins', 'practice', 'history'].includes(name)
           ? 'more'
           : name;
       $$('.trainer-nav [data-view]', root).forEach((item) => {
@@ -721,6 +722,7 @@
           requests: 'Eure Runde.',
           more: 'Dein TT.',
           practice: 'Einfach ausprobieren.',
+          history: 'Vergangene Trainings.',
           settings: 'So läuft’s bei euch.',
           admins: 'Dein Trainerteam.',
           attendance: 'Wer ist dabei?',
@@ -729,6 +731,7 @@
       if (name === 'requests') loadRequests();
       if (name === 'admins') loadAdmins();
       if (name === 'practice') loadPractice();
+      if (name === 'history') loadHistory();
     };
     const groupName = (jid) =>
       overview?.groups?.find((group) => group.jid === jid)?.name ||
@@ -1445,6 +1448,91 @@
         list.replaceChildren(text('p', message(error), 'auth-error'));
       }
     };
+    const loadHistory = async (offset = 0) => {
+      const list = $('[data-history-list]', root);
+      try {
+        const data = await api(route('/history?offset=' + offset));
+        if (!offset) {
+          list.replaceChildren();
+          $('[data-presence-panel]', root).replaceChildren();
+          presenceData = null;
+        }
+        $('[data-history-more]', list)?.remove();
+        if (!data.sessions.length && !offset)
+          list.append(text('p', 'Noch keine abgeschlossenen Trainings vorhanden.', 'empty-copy'));
+        data.sessions.forEach((session) => {
+          list.append(
+            button(
+              dayLabel(session.startAt) +
+                ' · ' +
+                timeLabel(session.startAt) +
+                ' · ' +
+                groupName(session.groupJid),
+              'presence:' + session.id,
+              'button button-outline',
+            ),
+          );
+        });
+        if (data.nextOffset !== null) {
+          const more = button(
+            'Weitere Trainings laden',
+            'history-more:' + data.nextOffset,
+            'button button-outline',
+          );
+          more.dataset.historyMore = '';
+          list.append(more);
+        }
+      } catch (error) {
+        showError(errorNode, error);
+      }
+    };
+    const loadPresence = async (id) => {
+      const data = await api(route('/sessions/' + encodeURIComponent(id) + '/presence'));
+      presenceData = data;
+      const panel = $('[data-presence-panel]', root);
+      panel.replaceChildren(
+        text('h3', dayLabel(data.session.startAt) + ' · ' + timeLabel(data.session.startAt)),
+      );
+      panel.append(
+        text(
+          'p',
+          '„Nach Zusage“ verwendet die gültige Rückmeldung. Korrekturen ändern keine Zusagen und versenden keine Nachrichten.',
+          'form-hint',
+        ),
+      );
+      data.participants.forEach((person) => {
+        const row = text('article', '', 'participant-row presence-row');
+        const copy = text('div', '', 'participant-copy');
+        const response = person.needsConfirmation
+          ? 'Erneute Bestätigung offen'
+          : person.response === 'yes'
+            ? 'Zugesagt'
+            : person.response === 'no'
+              ? 'Abgesagt'
+              : 'Keine Zusage';
+        copy.append(text('strong', person.name), text('span', response, 'participant-status'));
+        row.append(copy);
+        const controls = text('div', '', 'presence-controls');
+        [
+          ['automatic', 'Nach Zusage'],
+          ['present', 'War da'],
+          ['absent', 'War nicht da'],
+        ].forEach(([state, label]) => {
+          const control = button(
+            label,
+            'presence-set:' + person.userId + ':' + state,
+            'button button-outline',
+          );
+          control.setAttribute('aria-pressed', String(person.state === state));
+          control.setAttribute('aria-label', person.name + ': ' + label);
+          control.disabled = !person.editable;
+          controls.append(control);
+        });
+        row.append(controls);
+        panel.append(row);
+      });
+      panel.scrollIntoView({ block: 'start' });
+    };
     const refresh = async () => {
       await load();
       if (currentView === 'attendance' && attendanceSession) {
@@ -1519,6 +1607,34 @@
             if (!jid) throw userError('Bitte wähle zuerst eine Gruppe aus.');
             await post(route('/groups/select'), { jid, confirm: true });
             await refresh();
+          } catch (error) {
+            showError(errorNode, error);
+          }
+        }
+        if (action.startsWith('history-more:')) await loadHistory(Number(action.split(':')[1]));
+        if (action.startsWith('presence:')) {
+          try {
+            await loadPresence(action.slice(9));
+          } catch (error) {
+            showError(errorNode, error);
+          }
+        }
+        if (action.startsWith('presence-set:')) {
+          const [, userId, state] = action.split(':');
+          try {
+            const data = presenceData;
+            const person = data.participants.find((item) => item.userId === userId);
+            await post(
+              route(
+                '/sessions/' +
+                  encodeURIComponent(data.session.id) +
+                  '/presence/' +
+                  encodeURIComponent(userId),
+              ),
+              { sessionVersion: data.session.version, expectedUpdatedAt: person.updatedAt, state },
+            );
+            await loadPresence(data.session.id);
+            notify('Teilnahme korrigiert.');
           } catch (error) {
             showError(errorNode, error);
           }

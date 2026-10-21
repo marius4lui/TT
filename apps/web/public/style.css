@@ -2949,3 +2949,26 @@ summary::-webkit-details-marker {
   font: inherit;
   font-size: 14px;
 }
+
+.presence-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.presence-controls [aria-pressed='true'] {
+  background: var(--ink, #192e28);
+  color: #fff;
+}
+.presence-row {
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 1rem;
+}
+@media (max-width: 620px) {
+  .presence-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+[data-presence-panel] {
+  margin-top: 2rem;
+  scroll-margin-top: 2rem;
+}

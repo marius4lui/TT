@@ -396,12 +396,17 @@ export function registerMagicAndAccountRoutes(app: Hono<AppBindings>): void {
     if (session instanceof Response) return session;
     const db = c.env.DB,
       id = session.user.id;
-    const [aliases, memberships, attendance, consents, practice] = await Promise.all([
+    const [aliases, memberships, attendance, presence, consents, practice] = await Promise.all([
       all(db, 'SELECT jid FROM identity_aliases WHERE user_id=?', id),
       all(db, 'SELECT group_jid,active,updated_at FROM memberships WHERE user_id=?', id),
       all(
         db,
         'SELECT session_id,response,punctuality,minutes,arrival_time,updated_at FROM attendance WHERE user_id=?',
+        id,
+      ),
+      all(
+        db,
+        'SELECT session_id,state,updated_at,confirmed_by FROM session_presence WHERE user_id=?',
         id,
       ),
       all(db, 'SELECT purpose,version,accepted,created_at FROM consents WHERE user_id=?', id),
@@ -418,6 +423,7 @@ export function registerMagicAndAccountRoutes(app: Hono<AppBindings>): void {
       aliases,
       memberships,
       attendance,
+      presence,
       consents,
       practice,
     });

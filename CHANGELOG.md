@@ -4,6 +4,9 @@
 
 ### Neu
 
+- WhatsApp-Statistiken und Analysen für rollierend einen, sechs oder zwölf Monate: Ranglisten nach Zusagen mit optionalen Trainerkorrekturen, ohne aktuelle Trainer und mit Hinweis auf unvollständige Historie.
+- Rückmeldungen und Trainerkorrekturen bleiben 400 Tage nach Trainingsende verfügbar; persönliche Datenexporte enthalten Korrekturen. Bereits gelöschte Daten werden nicht wiederhergestellt.
+
 - Trainer über einen kopierbaren oder in WhatsApp teilbaren Link zur eigenen Übungsgruppe einladen.
 - Übungsmenü mit drei klaren Schritten, einer Situationsauswahl statt vieler Aktionsknöpfe und eingeklappter Textprobe.
 

@@ -18,6 +18,7 @@ import type { Env, BotContext, User } from './types';
 import { evolution, queue } from './outbox';
 import { requestGroupLink } from './group-requests';
 import { answerTrainingQuestion } from './questions';
+import { answerStatistics } from './statistics';
 import {
   dateInZone,
   findTraining,
@@ -1096,7 +1097,7 @@ export async function processMessage(
   if (cmd === '/hilfe' || cmd === '/help') {
     await reply(
       ctx,
-      `Reagiere mit 👍 oder 👎 auf die Trainingseinladung. Schreib zum Beispiel „Ich komme 10 Minuten später“. Konto und Einstellungen: ${ctx.origin}/login`,
+      `Reagiere mit 👍 oder 👎 auf die Trainingseinladung. Schreib zum Beispiel „Ich komme 10 Minuten später“. Statistiken: Stats oder /stats (auch /stats 6 monate). Konto und Einstellungen: ${ctx.origin}/login`,
     );
     return;
   }
@@ -1109,6 +1110,27 @@ export async function processMessage(
   const account = await handleAccountMessage(ctx);
   if (account !== null) {
     for (let i = 0; i < account.length; i++) await reply(ctx, account[i], i);
+    return;
+  }
+  const statisticsAnswer = await answerStatistics(ctx);
+  if (statisticsAnswer !== null) {
+    if (statisticsAnswer.groupJid) {
+      await queue(
+        env.DB,
+        {
+          kind: 'statistics',
+          key: `reply:${ctx.eventId}:0`,
+          chat: ctx.chatJid,
+          userId: ctx.user.id,
+          text: JSON.stringify({
+            groupJid: statisticsAnswer.groupJid,
+            months: statisticsAnswer.months ?? null,
+          }),
+          expires: ctx.now + 5 * 60000,
+        },
+        ctx.now,
+      );
+    } else await reply(ctx, statisticsAnswer.text);
     return;
   }
   const questionAnswer = await answerTrainingQuestion(ctx);

@@ -795,6 +795,126 @@ export function registerTrainerRoutes(app: Hono<AppBindings>): void {
     await materialize(c.env.DB, ctx.now, true);
     return c.json({ ok: true });
   });
+  // Historical corrections are optional; an uncorrected session uses its RSVP.
+  router.get('/history', async (c) => {
+    const offset = Number(c.req.query('offset') ?? 0);
+    if (!Number.isSafeInteger(offset) || offset < 0 || offset > 100000)
+      throw new TrainerError('invalid_input', 400);
+    const now = Date.now();
+    const rows = await all<Training>(
+      c.env.DB,
+      `SELECT s.* FROM training_sessions s WHERE s.end_at<=? AND s.end_at>=?
+       AND s.status='scheduled' AND NOT EXISTS(SELECT 1 FROM practice_groups p WHERE p.group_jid=s.group_jid)
+       ORDER BY s.end_at DESC,s.id LIMIT 51 OFFSET ?`,
+      now,
+      now - 400 * 86400000,
+      offset,
+    );
+    return c.json({
+      sessions: rows.slice(0, 50).map(sessionView),
+      nextOffset: rows.length > 50 ? offset + 50 : null,
+    });
+  });
+  const historicalTraining = async (c: TrainerContext) => {
+    const t = await training(c);
+    if (
+      t.status !== 'scheduled' ||
+      t.end_at > Date.now() ||
+      t.end_at < Date.now() - 400 * 86400000 ||
+      (await isPracticeGroup(c.env.DB, t.group_jid))
+    )
+      throw new TrainerError('session_changed');
+    return t;
+  };
+  router.get('/sessions/:id/presence', async (c) => {
+    const t = await historicalTraining(c);
+    const bot = (await setting(c.env.DB, 'bot_jid')) ?? '';
+    const rows = await all<{
+      userId: string;
+      name: string;
+      response: string;
+      needsConfirmation: number;
+      state: string;
+      updatedAt: number;
+      editable: number;
+    }>(
+      c.env.DB,
+      `SELECT u.id AS userId,u.display_name AS name,COALESCE(a.response,'unknown') AS response,
+       COALESCE(a.needs_confirmation,0) AS needsConfirmation,COALESCE(p.state,'automatic') AS state,COALESCE(p.updated_at,0) AS updatedAt,EXISTS(SELECT 1 FROM memberships m WHERE m.user_id=u.id AND m.group_jid=? AND m.active=1) AS editable
+       FROM users u LEFT JOIN attendance a ON a.user_id=u.id AND a.session_id=?
+       LEFT JOIN session_presence p ON p.user_id=u.id AND p.session_id=?
+       WHERE (a.user_id IS NOT NULL OR p.user_id IS NOT NULL OR EXISTS(SELECT 1 FROM memberships m WHERE m.user_id=u.id AND m.group_jid=? AND m.active=1))
+       AND u.jid!=? AND NOT EXISTS(SELECT 1 FROM identity_aliases b WHERE b.user_id=u.id AND b.jid=?)
+       ORDER BY u.display_name,u.id`,
+      t.group_jid,
+      t.id,
+      t.id,
+      t.group_jid,
+      bot,
+      bot,
+    );
+    return c.json({
+      session: sessionView(t),
+      participants: rows.map((r) => ({
+        ...r,
+        name: r.name.trim() || 'Mitglied · ' + r.userId.slice(0, 4),
+        needsConfirmation: !!r.needsConfirmation,
+      })),
+    });
+  });
+  router.post('/sessions/:id/presence/:userId', async (c) => {
+    const value = await input(
+      c,
+      z
+        .object({
+          sessionVersion: version,
+          expectedUpdatedAt: z.number().int().nonnegative(),
+          state: z.enum(['automatic', 'present', 'absent']),
+        })
+        .strict(),
+    );
+    const ctx = await context(c),
+      t = await historicalTraining(c),
+      userId = c.req.param('userId');
+    if (t.version !== value.sessionVersion) throw new TrainerError('session_changed');
+    const bot = (await setting(c.env.DB, 'bot_jid')) ?? '';
+    await commitTrainerMutation(
+      ctx,
+      'presence.correct',
+      [
+        c.env.DB.prepare(
+          `INSERT INTO session_presence(session_id,user_id,state,updated_at,confirmed_by) VALUES(?,?,?,?,?)
+       ON CONFLICT(session_id,user_id) DO UPDATE SET state=excluded.state,updated_at=excluded.updated_at,confirmed_by=excluded.confirmed_by`,
+        ).bind(
+          t.id,
+          userId,
+          value.state,
+          Math.max(ctx.now, value.expectedUpdatedAt + 1),
+          ctx.user.id,
+        ),
+      ],
+      [
+        sessionGuard([t]),
+        guard(
+          `EXISTS(SELECT 1 FROM users u WHERE u.id=? AND u.jid!=? AND NOT EXISTS(SELECT 1 FROM identity_aliases b WHERE b.user_id=u.id AND b.jid=?)
+       AND EXISTS(SELECT 1 FROM memberships m WHERE m.user_id=u.id AND m.group_jid=? AND m.active=1))`,
+          userId,
+          bot,
+          bot,
+          t.group_jid,
+        ),
+        guard(`NOT EXISTS(SELECT 1 FROM practice_groups WHERE group_jid=?)`, t.group_jid),
+        guard(
+          'COALESCE((SELECT updated_at FROM session_presence WHERE session_id=? AND user_id=?),0)=?',
+          t.id,
+          userId,
+          value.expectedUpdatedAt,
+        ),
+      ],
+    );
+    return c.json({ ok: true });
+  });
+
   router.get('/sessions/:id/attendance', async (c) => {
     const t = await training(c);
     return c.json({ session: sessionView(t), ...(await attendanceSnapshot(c.env.DB, t)) });

@@ -3,7 +3,7 @@
 Datum: 21. Oktober 2026. Diese Nachweise betreffen die lokale Open-Source-Vorbereitung sowie Versand nach Webänderungen, kontextabhängige Antworten, Übungsgruppen und den Login-Ablauf. Die separate Live-Prüfung steht unten.
 
 - Typprüfung und Worker-Dry-Run erfolgreich.
-- 818 Vitest-Tests in 26 Dateien erfolgreich, einschließlich Versand nach Webänderung ohne weiteren Webhook, Absage, fällig gewordener Einladung, Pausen, abgelehnter Änderungen und unklarem Provider-Ausgang.
+- 844 Vitest-Tests in 26 Dateien erfolgreich, einschließlich Versand nach Webänderung ohne weiteren Webhook, Absage, fällig gewordener Einladung, Pausen, abgelehnter Änderungen und unklarem Provider-Ausgang.
 - Zusätzliche Regressionen: Kurzantworten mit/ohne Kontext, deutsche Unicode-Zeichen, bestehende Sitzungen bei abgelaufenen Links, explizite Neuanmeldung, Bearbeitung der Login-Nachricht, isolierte Übungsdaten, unklare Gruppenanlage, Rollenentzug und atomare Rückmeldung mit Versandauftrag.
 - Neun Operator-Tests erfolgreich: Konfigurationsauswahl, Origin-Validierung, Transportfehler und Demo-Journal.
 - Formatprüfung und Prüfung lokaler Markdown-Verweise erfolgreich.
@@ -38,3 +38,11 @@ Quellstand `02050a7` wurde als Worker-Version `a37535f5-12a0-4b64-af68-293d65361
 Lokale Typprüfung, 818 Vitest-Tests, neun Operator-Tests, Worker-Build und kompletter Smoke erfolgreich. Die neuen Prüfungen sichern den Einladungslink auf die eigene Übungsgruppe ab und verwerfen ungültige Provider-Antworten. Im Chromium-Browser geprüft: Link kopieren, vorbereiteter WhatsApp-Teillink, Start/Ende, alle drei Situationen, eingeklappte Textprobe sowie Desktop und Mobilbreiten von 390 und 320 Pixeln ohne horizontalen Überlauf. Der Teillink wurde geprüft, aber keine Einladung an echte Empfänger versendet.
 
 Quellstand `cea8c33` wurde als Worker-Version `67c77339-82da-4e8b-ad3d-a44ffd3d064b` ausgerollt, ohne neue Datenbankmigration. Live im Chromium-Browser: Health erfolgreich, Login und Trainerbereich erreichbar, ausgeliefertes JavaScript stimmt mit dem geprüften Stand überein. [CI-Lauf](https://github.com/marius4lui/TT/actions/runs/39578950192) war zum Zeitpunkt der Live-Prüfung noch aktiv.
+
+## Nachtrag: Statistiken nach Zusagen und optionale Korrekturen
+
+Vollständige Typprüfung, 844 Vitest-Tests in 30 Dateien, neun Operator-Tests und Worker-Dry-Run erfolgreich. Die neuen Tests prüfen rollierende Kalenderzeiträume einschließlich Sommerzeit und Schaltjahr, Gruppentrennung, Trainerausschluss und Botaliase, Gleichstände, Trainerkorrekturen ohne Änderung der Zusage, Datenlücken, 400-Tage-Aufbewahrung, Exporte, Löschweitergabe sowie Berechtigungsentzug vor verzögertem Versand. Eine unabhängige Codeprüfung führte zur zusätzlichen Abgrenzung von Übungsgruppen im gemeinsamen Auswertungsdienst.
+
+Der vollständige lokale Smoke mit Worker/D1/Evolution-Mock prüft zusätzlich den Chatbefehl, die historische Terminliste und eine Korrektur mit anschließend veränderter Rangliste bei unveränderter ursprünglicher Zusage. Der [Implementierungsplan](STATS-PLAN.md) beschreibt Semantik, Grenzen und Datenhaltung.
+
+Chromium mit lokalem Worker: historische Termine öffnen, Korrektur setzen und zurückstellen, gespeicherten Zustand nach Neuladen prüfen; Desktop sowie 390/320 Pixel breite Ansichten ohne horizontalen Überlauf.

@@ -90,6 +90,7 @@ const deliveryAfterWrite: import('hono').MiddlewareHandler<AppBindings> = async 
   await next();
   if (
     !['GET', 'HEAD', 'OPTIONS'].includes(c.req.method) &&
+    !/^\/api\/v1\/trainer\/sessions\/[^/]+\/presence\/[^/]+$/.test(c.req.path) &&
     !['/api/v1/trainer/practice/preview', '/api/v1/trainer/practice/invite-link'].includes(
       c.req.path,
     ) &&
