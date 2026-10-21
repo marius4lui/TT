@@ -36,3 +36,5 @@ Quellstand `02050a7` wurde als Worker-Version `a37535f5-12a0-4b64-af68-293d65361
 ## Nachtrag: Trainer einladen und geführte Übung
 
 Lokale Typprüfung, 818 Vitest-Tests, neun Operator-Tests, Worker-Build und kompletter Smoke erfolgreich. Die neuen Prüfungen sichern den Einladungslink auf die eigene Übungsgruppe ab und verwerfen ungültige Provider-Antworten. Im Chromium-Browser geprüft: Link kopieren, vorbereiteter WhatsApp-Teillink, Start/Ende, alle drei Situationen, eingeklappte Textprobe sowie Desktop und Mobilbreiten von 390 und 320 Pixeln ohne horizontalen Überlauf. Der Teillink wurde geprüft, aber keine Einladung an echte Empfänger versendet.
+
+Quellstand `cea8c33` wurde als Worker-Version `67c77339-82da-4e8b-ad3d-a44ffd3d064b` ausgerollt, ohne neue Datenbankmigration. Live im Chromium-Browser: Health erfolgreich, Login und Trainerbereich erreichbar, ausgeliefertes JavaScript stimmt mit dem geprüften Stand überein. [CI-Lauf](https://github.com/marius4lui/TT/actions/runs/39578950192) war zum Zeitpunkt der Live-Prüfung noch aktiv.
