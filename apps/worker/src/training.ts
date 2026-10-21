@@ -39,7 +39,7 @@ export function dateInZone(ms: number, zone = 'Europe/Berlin'): string {
     day: '2-digit',
   }).format(ms);
 }
-export function label(t: Training): string {
+export function label(t: Training, multiline = false): string {
   const date = new Intl.DateTimeFormat('de-DE', {
     timeZone: t.timezone,
     weekday: 'long',
@@ -53,7 +53,7 @@ export function label(t: Training): string {
       hour: '2-digit',
       minute: '2-digit',
     }).format(n);
-  return `${date}, ${time(t.start_at)}–${time(t.end_at)} Uhr · ${t.location}`;
+  return `${date}${multiline ? '\n' : ', '}${time(t.start_at)}–${time(t.end_at)} Uhr${multiline ? '\n' : ' · '}${t.location}`;
 }
 export async function materialize(db: D1Database, now: number, force = false): Promise<void> {
   const today = dateInZone(now);

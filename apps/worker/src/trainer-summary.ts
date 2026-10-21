@@ -79,10 +79,10 @@ export async function renderTrainerSummary(
   p: SummaryRow,
 ): Promise<string> {
   const { participants, counts } = await attendanceSnapshot(db, t);
-  const lines = [`🏓 *Trainerübersicht*\n${label(t)}`];
+  const lines = [`🏓 *Trainerübersicht*\n${label(t, true)}`];
   if (p.include_counts)
     lines.push(
-      `Zusagen: ${counts.yes} · Absagen: ${counts.no} · Offen/erneut bestätigen: ${counts.unanswered} · Mitglieder: ${counts.total}`,
+      `Zusagen: ${counts.yes}\nAbsagen: ${counts.no}\nNoch offen / erneut bestätigen: ${counts.unanswered}\nMitglieder: ${counts.total}`,
     );
   if (p.include_absent)
     lines.push(
@@ -102,6 +102,7 @@ export async function renderTrainerSummary(
           .join(', ') || 'keine'
       }`,
     );
+  lines.push('Wer zugesagt hat? Frag einfach: „Wer kommt?“');
   return lines.join('\n\n');
 }
 export async function planTrainerSummaries(db: D1Database, now: number): Promise<void> {

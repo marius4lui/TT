@@ -8,6 +8,10 @@
 
 ### Behoben
 
+- Trainingseinladungen zeigen Datum, Zeit und Ort auf eigenen Zeilen, einen einzelnen Link zu den Trainingsinfos und den Hinweis auf „Wer kommt?“.
+- Verspätungserinnerungen wiederholen das Uhr-Symbol nicht im Text; die anklickbare Reaktion bleibt erhalten. Trainerübersichten verwenden übersichtliche Zahlenzeilen.
+- „Wer kommt?“ und verwandte Fragen liefern eine lesbare Zusagenliste mit Verspätungen. Private Fragen berücksichtigen ausschließlich eigene aktive Gruppen und fragen bei mehreren Gruppen nach.
+
 - Kurze deutsche Antworten wie „Kann doch“ und „ich kann“ nutzen eine aktuelle eigene Rückmeldung oder die direkt beantwortete Einladung als Kontext. Fragen, Unsicherheit und Aussagen über andere Personen werden nicht zu Zusagen umgedeutet.
 - Bestehende Browsersitzungen öffnen auch benutzte oder abgelaufene Login-Links ohne erneute Anmeldung. Für geschützte Aktionen gibt es eine ausdrückliche Neuanmeldung mit `/login neu`.
 - Einmal-Links gelten fünf Minuten. Nach Nutzung oder Ablauf wird die ursprüngliche private Nachricht innerhalb des Provider-Bearbeitungsfensters durch einen dauerhaften Zugangslink ersetzt; unklare Bearbeitungen werden nicht als neue Nachricht wiederholt.

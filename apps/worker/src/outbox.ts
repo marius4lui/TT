@@ -62,13 +62,13 @@ export async function queue(db: D1Database, input: QueueInput, now: number): Pro
     .run();
 }
 const NOTICE_GAP = 10 * 60_000;
-export function invitation(t: Training, _origin: string, now = t.invite_at): string {
+export function invitation(t: Training, origin: string, now = t.invite_at): string {
   const combined = now >= t.late_at - NOTICE_GAP;
-  return `🏓 *${t.version > 1 ? 'Training geändert' : 'Tischtennistraining'}*\n${label(t)}\n\n👍 Ich komme\n👎 Ich komme nicht${combined ? '\n⏰ Ich komme später' : ''}\n\nReagiere direkt auf diese Nachricht.`;
+  return `🏓 *${t.version > 1 ? 'Training geändert' : 'Tischtennistraining'}*\n${label(t, true)}\n\n👍 Ich komme\n👎 Ich komme nicht${combined ? '\n⏰ Ich komme später' : ''}\n\nReagiere direkt auf diese Nachricht.\n\nWer ist dabei? Frag einfach: „Wer kommt?“${origin ? `\nTrainingsinfos: ${origin}/info` : ''}`;
 }
 export function lateNotice(t: Training, _origin: string, now: number): string {
   const minutes = Math.max(0, Math.round((t.start_at - now) / 60000));
-  return `⏰ *${minutes > 0 ? `Training in ${minutes} ${minutes === 1 ? 'Minute' : 'Minuten'}` : 'Das Training hat begonnen'}*\n${label(t)}\n\nDu kommst später? Tippe auf die ⏰-Reaktion unten.\nDoch pünktlich? Nimm deine Reaktion wieder zurück.`;
+  return `*${minutes > 0 ? `Training in ${minutes} ${minutes === 1 ? 'Minute' : 'Minuten'}` : 'Das Training hat begonnen'}*\n${label(t, true)}\n\nDu kommst später? Tippe unten auf die Uhr-Reaktion.\nDoch pünktlich? Nimm sie wieder zurück.\n\nFür die Teilnehmerliste frag einfach: „Wer kommt?“`;
 }
 export async function planJobs(db: D1Database, now: number): Promise<void> {
   if ((await setting(db, 'enabled')) !== '1' || (await setting(db, 'privacy_ready')) !== '1')
@@ -365,7 +365,7 @@ export async function sendOutbox(
             if (!preference) throw new TransportError('permanent');
             text = await renderTrainerSummary(env.DB, training, preference);
           } else if (['invite', 'personal_invite'].includes(j.kind)) {
-            text = invitation(training, '', now);
+            text = invitation(training, await setting(env.DB, 'origin'), now);
             seedClock = now >= training.late_at - NOTICE_GAP;
           } else {
             text = lateNotice(training, '', now);

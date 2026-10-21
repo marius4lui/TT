@@ -71,3 +71,6 @@ Regulären Nachrichtenbetrieb erst nach erfolgreicher Abnahme der kritischen Fä
 - [ ] Ein bereits angemeldeter Browser öffnet auch einen benutzten, abgelaufenen oder unvollständigen Login-Link direkt im bestehenden Konto. Eine explizite frische Bestätigung für Rollenaktionen bleibt möglich.
 - [ ] Nach Nutzung wird die ursprüngliche WhatsApp-Login-Nachricht bearbeitet und zeigt den dauerhaften Zugang. Nach ungenutztem Ablauf geschieht dies durch den nächsten Minutenlauf. Es erscheint keine zweite private Login-Nachricht.
 - [ ] Die installierte Evolution-Version unterstützt `POST /chat/updateMessage/{instance}` mit `number`, eigener Nachrichten-`key` und `text`. Auf echten Endgeräten innerhalb des WhatsApp-Bearbeitungsfensters prüfen.
+
+- [ ] Neue Einladungen enthalten genau einen Info-Link; die Verspätungsnachricht zeigt die Uhr nur als anklickbare Reaktion. Datum, Uhrzeit und Ort sind getrennt lesbar.
+- [ ] „Wer kommt?“ liefert bestätigte Zusagen, kennzeichnet Verspätungen und verändert keine Rückmeldung. In privaten Chats werden fremde Gruppen nicht offengelegt; mehrere passende Gruppen werden nicht vermischt.

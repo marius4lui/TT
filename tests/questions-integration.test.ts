@@ -263,3 +263,37 @@ describe('contextual short attendance replies in real training', () => {
     expect(await response()).toBe('yes');
   });
 });
+
+describe('read-only participant questions', () => {
+  it.each([
+    'Wer kommt?',
+    'Wer kommt alles?',
+    'Wer ist heute dabei?',
+    'Wer hat zugesagt?',
+    'Wer kommt zum Training?',
+  ])('answers %s within the current group', async (text) => {
+    await db
+      .prepare(
+        "INSERT INTO attendance(session_id,user_id,response,updated_at) VALUES('current',?,'yes',?)",
+      )
+      .bind(user.id, now)
+      .run();
+    const before = (await db.prepare('SELECT * FROM attendance').all()).results;
+    const result = await ask(text);
+    expect(result).toContain('*Zusagen: 1*');
+    expect(result).toContain('• Sebastian');
+    expect(result).not.toContain('Halle B');
+    expect((await db.prepare('SELECT * FROM attendance').all()).results).toEqual(before);
+  });
+  it('asks for a group privately rather than mixing rosters, then answers when scope is unique', async () => {
+    expect(await ask('Wer kommt?', true)).toContain('mehrere passende Trainingsgruppen');
+    await db.prepare('UPDATE memberships SET active=0 WHERE group_jid=?').bind(other).run();
+    expect(await ask('Wer kommt?', true)).toContain('Bisher hat noch niemand zugesagt.');
+    await db.prepare('UPDATE memberships SET active=0').run();
+    expect(await ask('Wer kommt?', true)).toContain('keinen anstehenden Termin');
+  });
+  it('does not interpret quoted or unrelated questions as a participant list', async () => {
+    expect(await ask('Er fragt „Wer kommt?“')).toBe('');
+    expect(await ask('Wer kommt zur Party?')).toBe('');
+  });
+});

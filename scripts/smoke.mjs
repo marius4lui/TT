@@ -657,7 +657,11 @@ SELECT COUNT(*) AS n FROM messages WHERE kind='invite' AND chat_jid=${quote(grou
         1,
       'duplicate_late_prompt',
     );
-    check(!/https?:|Powered|\/r\//.test(combined.text), 'repeated_links');
+    check(
+      (combined.text.match(/https?:\/\//g) ?? []).length === 1 &&
+        combined.text.includes(origin + '/info'),
+      'invitation_info_link',
+    );
     progress('one combined last-minute message and native clock reaction verified');
   }
   for (let attempt = 0; attempt < 20 && loginEdits.length < 2; attempt++) await pause(100);

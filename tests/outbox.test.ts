@@ -1,6 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { testDb } from './helpers/db';
-import { planJobs, queue, sendOutbox, type QueueInput } from '../apps/worker/src/outbox';
+import {
+  planJobs,
+  queue,
+  sendOutbox,
+  lateNotice,
+  type QueueInput,
+} from '../apps/worker/src/outbox';
 import { processMessage } from '../apps/worker/src/bot';
 import { occurrence } from '@tt/core';
 import { EvolutionClient, TransportError } from '@tt/whatsapp';
@@ -79,7 +85,7 @@ async function job(overrides: Partial<QueueInput> = {}) {
 }
 
 describe('durable planning and delivery guards', () => {
-  it('combines overdue invitation and late prompt without links or a second text', async () => {
+  it('combines overdue invitation and late prompt with one info link and no second text', async () => {
     const at = times.startAt - 60_000;
     await planJobs(db, at);
     const mock = sender();
@@ -90,7 +96,9 @@ describe('durable planning and delivery guards', () => {
       expect(text).toContain('👍 Ich komme');
       expect(text).toContain('👎 Ich komme nicht');
       expect(text).toContain('⏰ Ich komme später');
-      expect(text).not.toMatch(/https?:|Powered|training\)/);
+      expect(text.match(/https?:\/\//g)).toHaveLength(1);
+      expect(text).toContain('https://tt.example.org/info');
+      expect(text).toContain('„Wer kommt?“');
     }
     expect(mock.sendReaction).toHaveBeenCalledTimes(2);
     await planJobs(db, at + 60_000);
@@ -400,4 +408,15 @@ describe('outbox failure classification', () => {
       attempts: 5,
     });
   });
+});
+
+it('keeps the late reminder readable with the clock only on the reaction', async () => {
+  const t = await db
+    .prepare("SELECT * FROM training_sessions WHERE id='training'")
+    .first<import('../apps/worker/src/training').Training>();
+  const text = lateNotice(t!, '', times.startAt - 30 * 60000);
+  expect(text).not.toContain('⏰');
+  expect(text).toContain('Tippe unten auf die Uhr-Reaktion');
+  expect(text).toContain('„Wer kommt?“');
+  expect(text).toContain('\n18:00–20:00 Uhr\nSporthalle');
 });
