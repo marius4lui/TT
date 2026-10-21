@@ -1,0 +1,36 @@
+# Daten und Datenschutz für Betreiber
+
+Dieses Dokument beschreibt die technische Verarbeitung. Betreiber ergänzen ihre verantwortliche Stelle, Rechtsgrundlage, Kontaktwege und die zutreffenden Dienstleister in den öffentlichen Datenschutzhinweisen. Die App liefert keine fertige rechtliche Freigabe.
+
+## Datenfluss
+
+WhatsApp/Evolution liefert Nachrichtenereignisse an den Worker. TT normalisiert Identität, Gruppenbezug, Reaktion bzw. unterstützten Text und speichert verarbeitbare Ereignisse vorübergehend in D1. Regeln erzeugen Rückmeldungen, Termine und Versandaufträge. Es gibt keinen KI-Dienst und kein Modelltraining durch TT.
+
+Die Installation speichert unter anderem WhatsApp-Kennungen und explizite Identitätsverknüpfungen, Anzeigenamen, Gruppenmitgliedschaften, Rollen, Termine, Teilnahme, Zustimmungen, Sessions und technische Auftragszustände. Auch Teilnahme ohne Webkonto benötigt eine Zuordnung zur WhatsApp-Identität. „Kein Konto erforderlich“ bedeutet nicht „keine personenbezogenen Daten“.
+
+Cloudflare und der eigene Evolution-Betreiber verarbeiten zusätzliche Betriebsdaten. WhatsApp bleibt ein externer Dienst. Eine D1-Jurisdiktion `eu` ist keine Zusage, dass sämtliche Verarbeitung einschließlich Workers, WhatsApp und Evolution ausschließlich in der EU stattfindet.
+
+## Aktuelle technische Aufbewahrung
+
+Die tägliche Bereinigung wird durch den Cron ausgeführt. Bei ausgefallenem Cron können Daten länger liegen bleiben.
+
+| Daten                                                                                             | Verhalten im Code                                                                                 |
+| ------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| Abgelaufene Dialoge, Login-Challenges, Magic-Links, Sessions, Rollenübertragungen und Rate-Limits | Nach Ablauf bei Bereinigung gelöscht                                                              |
+| Inbox-Nutzdaten                                                                                   | Nach Verarbeitung bereinigt; spätestens nach einem Tag geleert, offene alte Ereignisse abgelaufen |
+| Inbox-Einträge und Verarbeitungsbelege                                                            | Nach 30 Tagen gelöscht                                                                            |
+| Gesendete private Antworttexte                                                                    | Nach erfolgreichem Versand geleert                                                                |
+| Abgeschlossene Outbox-Texte                                                                       | Nach sieben Tagen geleert; abgelaufene wartende Texte ebenfalls geleert                           |
+| Outbox-Einträge                                                                                   | Nach 30 Tagen gelöscht, außer dauerhaften Deduplizierungsbelegen für Gruppenbegrüßungen           |
+| Rückmeldungen                                                                                     | Nach 90 Tagen seit Trainingsende gelöscht                                                         |
+| Nachrichtenreferenzen                                                                             | Nach 90 Tagen gelöscht                                                                            |
+| Audit-Log                                                                                         | Nach 180 Tagen gelöscht                                                                           |
+| Benutzer, Gruppen, Serien, Trainings und Zustimmungen                                             | Keine allgemeine zeitgesteuerte Löschung; Kontolöschung und gezielte Betreiberverwaltung beachten |
+
+Maßgeblich sind `inbox.ts`, `outbox.ts` und die Kontolöschlogik. Backups und Providerlogs besitzen eigene Aufbewahrungsfristen; das Löschen in TT löscht nicht automatisch Nachrichten auf WhatsApp-Geräten oder externe Sicherungen.
+
+## Konten und Zugang
+
+Registrierung und persönliche Mitgliedererinnerungen benötigen getrennte ausdrückliche Zustimmung. Trainerübersichten sind ebenfalls freiwillig. `/konto` bietet Datenabruf, Einstellungen und Kontolöschung. Der letzte Owner kann nicht ohne Nachfolge entfernt werden.
+
+Persönliche Login-Links sind Zugangsnachweise. Wer einen gültigen Link besitzt und bestätigt, kann sich als die angezeigte Identität anmelden. Links deshalb nicht weiterleiten oder in Issues, Screenshots und Logs veröffentlichen. Eine neue Anforderung widerruft den alten offenen Link. Sessions und Token werden serverseitig durch Hashes geprüft; zustellbare Links befinden sich vorübergehend im privaten Versandauftrag.

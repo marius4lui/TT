@@ -71,7 +71,7 @@ export async function planJobs(db: D1Database, now: number): Promise<void> {
   if ((await setting(db, 'enabled')) !== '1' || (await setting(db, 'privacy_ready')) !== '1')
     return;
   await materialize(db, now);
-  const origin = await setting(db, 'origin', 'https://tt.bz3.eu');
+  const origin = await setting(db, 'origin');
   const sessions = await all<Training>(
     db,
     `SELECT s.* FROM training_sessions s JOIN groups g ON g.jid=s.group_jid WHERE s.status='scheduled' AND s.end_at>? AND s.invite_at<=? AND g.active=1 ORDER BY s.start_at LIMIT 100`,

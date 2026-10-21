@@ -4,6 +4,7 @@ export interface Env {
   EVOLUTION_URL: string;
   EVOLUTION_INSTANCE: string;
   EVOLUTION_API_KEY: string;
+  SOURCE_URL?: string;
 }
 export interface User {
   id: string;

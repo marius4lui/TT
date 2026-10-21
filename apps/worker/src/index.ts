@@ -33,7 +33,7 @@ app.use('*', async (c, next) => {
   if (c.req.path.startsWith('/api/') || ['/login', '/konto', '/trainer'].includes(c.req.path))
     c.header('Cache-Control', 'no-store');
   if (c.req.path.startsWith('/api/') && !['GET', 'HEAD', 'OPTIONS'].includes(c.req.method)) {
-    const allowed = await setting(c.env.DB, 'origin', 'https://tt.bz3.eu');
+    const allowed = await setting(c.env.DB, 'origin');
     if (c.req.header('Origin') !== allowed) return c.json({ error: 'origin_mismatch' }, 403);
     if (c.req.header('Sec-Fetch-Site') === 'cross-site')
       return c.json({ error: 'origin_mismatch' }, 403);
@@ -82,9 +82,38 @@ app.post('/webhooks/evolution', async (c) => {
   );
   return c.json({ accepted }, 202);
 });
+// Web edits commit durable jobs just like chat commands. Wake delivery immediately;
+// Cron remains the recovery path if this request's background work is interrupted.
+app.use('/api/v1/trainer/*', async (c, next) => {
+  await next();
+  if (
+    !['GET', 'HEAD', 'OPTIONS'].includes(c.req.method) &&
+    c.res.status >= 200 &&
+    c.res.status < 300 &&
+    c.env.EVOLUTION_API_KEY
+  ) {
+    c.executionCtx.waitUntil(
+      dispatchPending(c.env).catch(() => {
+        // Never log request bodies, provider errors, tokens or message text.
+        console.error('TT: background delivery failed; scheduled recovery remains active.');
+      }),
+    );
+  }
+});
 registerAuthRoutes(app);
 registerGroupRequestRoutes(app);
 registerTrainerRoutes(app);
+// Operators running a modified version must point this at its corresponding source.
+app.get('/source', (c) => {
+  try {
+    const url = new URL(c.env.SOURCE_URL ?? 'https://github.com/marius4lui/TT');
+    if (url.protocol !== 'https:' || url.username || url.password)
+      throw new Error('invalid_source');
+    return c.redirect(url.href, 302);
+  } catch {
+    return c.text('Quellcode-Link nicht konfiguriert.', 503);
+  }
+});
 app.get('/api/v1/sessions', async (c) => {
   const session = await getSession(c.req.raw, c.env);
   if (!session) return c.json({ error: 'unauthorized' }, 401);
@@ -179,7 +208,7 @@ app.get('*', async (c) => {
     infoText: await setting(c.env.DB, 'info_text'),
     privacyText: await setting(c.env.DB, 'privacy_text'),
     botNumber: botJid.endsWith('@s.whatsapp.net') ? botJid.split('@')[0] : '',
-    origin: await setting(c.env.DB, 'origin', 'https://tt.bz3.eu'),
+    origin: await setting(c.env.DB, 'origin'),
   };
   if (c.req.path.startsWith('/t/')) {
     const t = await c.env.DB.prepare('SELECT * FROM training_sessions WHERE id=?')
@@ -200,11 +229,15 @@ app.get('*', async (c) => {
   return c.text('Seite nicht gefunden.', 404);
 });
 
-export async function scheduled(env: Env, now = Date.now()): Promise<void> {
-  await drainInbox(env, now);
+export async function dispatchPending(env: Env, now = Date.now()): Promise<void> {
   await planJobs(env.DB, now);
   await planTrainerSummaries(env.DB, now);
   if (env.EVOLUTION_API_KEY) await sendOutbox(env, now);
+}
+
+export async function scheduled(env: Env, now = Date.now()): Promise<void> {
+  await drainInbox(env, now);
+  await dispatchPending(env, now);
   await cleanup(env.DB, now);
   await setSetting(env.DB, 'last_cron', new Date(now).toISOString());
 }

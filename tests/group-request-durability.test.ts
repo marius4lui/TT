@@ -71,7 +71,7 @@ it.each(['link', 'membership'])(
     expect(jobs[0]).toMatchObject({ kind: 'reply', chat_jid: group });
     expect(jobs[0].text).toContain('*Marius Bot*');
     expect(jobs[0].text).toContain('*Ma rius Team*');
-    expect(jobs[0].text).toContain('_Powered by KMUC_');
+    expect(jobs[0].text).toContain('_Powered by TT_');
   },
 );
 it('renews an expired pending invitation with verified metadata', async () => {

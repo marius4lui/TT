@@ -7,6 +7,10 @@ coverage/
 .dev.vars*
 .env*
 !.env.example
+!.dev.vars.example
+wrangler.production.jsonc
+wrangler.*.local.jsonc
+backups/
 *.log
 *.sqlite*
 *.db

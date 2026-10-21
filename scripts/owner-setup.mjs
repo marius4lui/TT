@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 // Local operator helper: the one-time code is copied directly, never logged or
 // saved. WhatsApp identity is still proven by the human sending and confirming it.
 const root = fileURLToPath(new URL('../', import.meta.url));
+const configPath = resolve(root, process.env.TT_CONFIG || 'wrangler.production.jsonc');
 function node(script, args) {
   const result = spawnSync(process.execPath, [resolve(root, script), ...args], {
     cwd: root,
@@ -24,14 +25,22 @@ try {
       'execute',
       'DB',
       '--remote',
+      '--config',
+      configPath,
       '--command',
       "SELECT value FROM settings WHERE key='bot_jid';",
       '--json',
     ]),
   );
   const jid = state[0]?.results?.[0]?.value;
-  if (jid !== '4915237295324@s.whatsapp.net') throw new Error('unexpected_bot');
-  const output = node('scripts/setup.mjs', ['--remote', '--reset-bootstrap']);
+  if (typeof jid !== 'string' || !/^[1-9]\d{6,14}@s\.whatsapp\.net$/.test(jid))
+    throw new Error('unexpected_bot');
+  const output = node('scripts/setup.mjs', [
+    '--remote',
+    '--config',
+    configPath,
+    '--reset-bootstrap',
+  ]);
   const message = output.match(/^\/einrichten [a-f0-9]{48}\s*$/m)?.[0]?.trim();
   if (!message) {
     if (output.includes('Ein Owner ist bereits eingerichtet.')) {
@@ -51,7 +60,7 @@ try {
     if (clipboard.error || clipboard.status !== 0) throw new Error('clipboard_failed');
     console.log('Admin-Einrichtungsbefehl in die Zwischenablage kopiert (30 Minuten gueltig).');
     console.log(
-      'Privat an TTBot, +49 1523 7295324, einfuegen und senden. Danach mit JA bestaetigen.',
+      `Privat an den eingerichteten Bot (+${jid.split('@')[0]}) einfuegen und senden. Danach mit JA bestaetigen.`,
     );
     console.log(
       'Anschliessend /login senden und Gruppen, Trainingsplan und Datenschutz im Web einrichten.',

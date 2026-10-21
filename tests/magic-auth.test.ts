@@ -12,7 +12,7 @@ import { hashToken, randomToken } from '../apps/worker/src/security';
 import type { AppBindings, BotContext, Env, User } from '../apps/worker/src/types';
 
 let db: ReturnType<typeof testDb>, env: Env, app: Hono<AppBindings>, now: number;
-const origin = 'https://tt.bz3.eu';
+const origin = 'https://tt.example.org';
 beforeEach(async () => {
   db = testDb();
   now = Date.now();

@@ -17,7 +17,7 @@ let db: ReturnType<typeof testDb>, env: Env, owner: User, member: User, now: num
 const bot = '491701111111@s.whatsapp.net',
   group = '120363123456@g.us',
   code = 'AbCdEfGhIjKlMnOpQrStUv';
-const origin = 'https://tt.bz3.eu',
+const origin = 'https://tt.example.org',
   link = `https://chat.whatsapp.com/${code}`;
 function provider() {
   return {

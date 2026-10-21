@@ -1,4 +1,6 @@
-# Evolution-Zugang auf diesem Windows-Rechner
+# Optionale Windows-Zugangsdatenverwaltung
+
+Die plattformübergreifende Einrichtung steht in [SELF_HOSTING.md](SELF_HOSTING.md). Dieser Helfer ist optional. Vor `Setup` die eigene `wrangler.production.jsonc` anlegen, D1 migrieren und `$env:TT_ORIGIN = 'https://training.example.org'` auf die tatsächliche öffentliche Adresse setzen. Optional wählt `$env:TT_CONFIG` eine andere Wrangler-Datei.
 
 `Evolution-Zugangsdaten.cmd` startet die verdeckte Eingabe. Alternativ aus dem Repository:
 
@@ -32,7 +34,7 @@ Sicherung gedacht.
 - `Status` zeigt nur, ob Zugang und Testnummer gespeichert sind.
 - `Check` entschlüsselt den Zugang im Prozess und prüft Verbindung und Botidentität.
 - `Setup` prüft zuerst die Instanz und einen bestehenden Webhook. Ein fremder
-  Webhook wird nicht überschrieben. Es aktualisiert URL/Instanz in `wrangler.jsonc`,
+  Webhook wird nicht überschrieben. Es aktualisiert URL/Instanz in der eigenen `wrangler.production.jsonc`,
   veröffentlicht den Worker und verwendet das vorhandene Setup für Secret,
   authentifizierten Webhook und Einmalcode. TT bleibt pausiert. Den ausgegebenen
   Code vom eigenen Haupthandy privat an den Bot senden und mit `JA` bestätigen.

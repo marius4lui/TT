@@ -10,6 +10,7 @@ export function testDb(): D1Database & { close(): void } {
     .filter((f) => f.endsWith('.sql'))
     .sort())
     sqlite.exec(readFileSync(`${path}/${file}`, 'utf8'));
+  sqlite.prepare("UPDATE settings SET value='https://tt.example.org' WHERE key='origin'").run();
   function statement(sql: string, values: unknown[] = []): D1PreparedStatement {
     const query = () => sqlite.prepare(sql);
     const result = (rows: unknown[], changes = 0) => ({

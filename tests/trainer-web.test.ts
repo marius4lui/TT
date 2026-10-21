@@ -5,7 +5,7 @@ import { registerTrainerRoutes } from '../apps/worker/src/trainer';
 import { hashToken } from '../apps/worker/src/security';
 import type { AppBindings, Env } from '../apps/worker/src/types';
 
-const origin = 'https://tt.bz3.eu',
+const origin = 'https://tt.example.org',
   group = '120363123456@g.us',
   now = Date.parse('2026-10-09T12:00:00Z');
 let db: ReturnType<typeof testDb>, env: Env, app: Hono<AppBindings>;

@@ -1031,7 +1031,7 @@ export async function processMessage(
     eventId: event.id,
     timestamp: event.timestamp,
     now,
-    origin: await setting(env.DB, 'origin', 'https://tt.bz3.eu'),
+    origin: await setting(env.DB, 'origin'),
     credentialHash: event.credentialHash,
   };
   if (event.isGroup)

@@ -12,7 +12,7 @@ import { consumeRateLimit, hashToken, randomToken } from '../apps/worker/src/sec
 import type { AppBindings, BotContext, Env, User } from '../apps/worker/src/types';
 
 let db: ReturnType<typeof testDb>, env: Env, app: Hono<AppBindings>, clock: number;
-const origin = 'https://tt.bz3.eu';
+const origin = 'https://tt.example.org';
 beforeEach(async () => {
   db = testDb();
   env = {

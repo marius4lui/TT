@@ -157,7 +157,7 @@ export function registerAuthRoutes(app: Hono<AppBindings>): void {
   app.use('/api/v1/auth/*', async (c, next) => {
     c.header('Cache-Control', 'no-store');
     if (c.req.method !== 'GET') {
-      const origin = await setting(c.env.DB, 'origin', 'https://tt.bz3.eu');
+      const origin = await setting(c.env.DB, 'origin');
       if (c.req.header('Origin') !== origin || new URL(c.req.url).origin !== origin)
         return c.json({ error: 'origin' }, 403);
     }

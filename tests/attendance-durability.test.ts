@@ -57,7 +57,7 @@ beforeEach(async () => {
     eventId: 'attendance-event',
     timestamp: now + 1000,
     now: now + 1000,
-    origin: 'https://tt.bz3.eu',
+    origin: 'https://tt.example.org',
   };
   change = {
     id: ctx.eventId,

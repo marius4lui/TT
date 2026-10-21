@@ -166,7 +166,7 @@ export function registerMagicAndAccountRoutes(app: Hono<AppBindings>): void {
     app.use(path, async (c, next) => {
       c.header('Cache-Control', 'no-store');
       if (!['GET', 'HEAD'].includes(c.req.method)) {
-        const origin = await setting(c.env.DB, 'origin', 'https://tt.bz3.eu');
+        const origin = await setting(c.env.DB, 'origin');
         if (c.req.header('Origin') !== origin || new URL(c.req.url).origin !== origin)
           return c.json({ error: 'origin' }, 403);
       }

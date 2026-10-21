@@ -1,6 +1,6 @@
-﻿# Abnahme vor Freigabe
+# Abnahme einer eigenen Installation
 
-Stand: 9. Oktober 2026. Das bestehende Hosting und die Evolution-Anbindung wurden geprüft. Owner, eigene Demogruppe und Datenschutzhinweis wurden im bisherigen privaten Funktionstest bestätigt; die Trainingsautomatik bleibt pausiert. Lokale Checks und der Mock-Smoketest der neuen Webversion sind erfolgreich gelaufen, weitere Integrationstests begleiten die Fertigstellung. Die neue Version ist noch nicht veröffentlicht. Der neue Anmeldelink, die Gruppenfreigabe und der vollständige Ablauf wurden noch nicht mit einer Person am echten WhatsApp-Gerät abgenommen. Der bekannte CI-Abrechnungsblock bleibt offen. Ältere Nachweise stehen in [VALIDATION.md](VALIDATION.md) und gelten nur für die dort bezeichnete Version.
+Installation, Version/Commit, Evolution-Version, Betriebssysteme und Testdatum dokumentieren. Lokale Checks ersetzen keine echte Geräteabnahme. Diese Vorlage enthält keine Freigabe einer konkreten Installation.
 
 Die folgenden Punkte sind die verbleibende Abnahme, keine Behauptung bereits erfolgreicher Tests. Nur Datum, Umgebung, App-/Betriebssystemversion, Ergebnis und technische Referenz festhalten. Keine Telefonnummern, Tokens, API-Keys, Chatverläufe oder unnötigen personenbezogenen Daten in das Protokoll aufnehmen. Lokale Prüfungen ersetzen keine echte WhatsApp-Abnahme.
 
@@ -9,9 +9,9 @@ Die folgenden Punkte sind die verbleibende Abnahme, keine Behauptung bereits erf
 - [ ] Verantwortliche Stelle und vollständige Datenschutzhinweise geprüft; die Gruppe kennt die Verarbeitung und eine alternative Rückmeldung beim Trainer.
 - [ ] Ausschließlich die ausdrücklich freigegebene Demogruppe beziehungsweise Testgruppe verwenden; keine andere Instanz oder deren Webhook überschreiben.
 - [ ] Zielkonto, vorhandene D1, Evolution-Instanz, Secret, Domain und Cron kontrolliert; Wiederherstellungspunkt vor Migration erfasst.
-- [ ] Neue additive Migrationen und passende Webversion veröffentlicht; vorhandene Owner-/Gruppenzustände erhalten und Trainingsautomatik weiterhin pausiert.
+- [ ] Passende Migrationen und Webversion veröffentlicht; bei Updates vorhandene Owner-/Gruppenzustände erhalten und Trainingsautomatik weiterhin pausiert.
 - [ ] Abschließendes `pnpm check`, `pnpm smoke` und Formatprüfung erfolgreich dokumentiert. Der Smoke nutzt nur lokalen workerd, isolierte D1 und Mock-Evolution.
-- [ ] CI-Prüfung nach Aufhebung des Abrechnungsblocks erfolgreich; lokale Ergebnisse werden bis dahin ausdrücklich getrennt ausgewiesen.
+- [ ] CI-Prüfung der zu veröffentlichenden Version erfolgreich; lokale Ergebnisse werden getrennt ausgewiesen.
 
 ## Anmeldung, Rolle und freiwilliges Konto
 
@@ -30,7 +30,7 @@ Die folgenden Punkte sind die verbleibende Abnahme, keine Behauptung bereits erf
 
 - [ ] Gruppenlink erzeugt eine offene Anfrage und aktiviert keine Gruppe. Erst Trainerfreigabe erlaubt Beitritt/Aktivierung.
 - [ ] Direkter Botbeitritt wird durch `GROUPS_UPSERT` beziehungsweise Gruppenaktualisierung erkannt und braucht ebenfalls Freigabe. Gruppenauswahl kann diese Freigabe nicht umgehen.
-- [ ] Freigabe erzeugt genau eine verständliche Begrüßung mit „Powered by KMUC“. Wiederholte Ereignisse oder Freigaben verdoppeln sie nicht.
+- [ ] Freigabe erzeugt genau eine verständliche Begrüßung mit „Powered by TT“. Wiederholte Ereignisse oder Freigaben verdoppeln sie nicht.
 - [ ] Echter Bot kann in der freigegebenen Gruppe senden und empfangen. Gruppenreaktionen erzeugen keine zusätzlichen Bestätigungsnachrichten.
 - [ ] Webhook lehnt falsches Token, falsche Instanz, eigene ausgehende Nachrichten und Historienimport ab; Wiederholungen bleiben folgenlos. `GROUPS_UPSERT` ist tatsächlich abonniert.
 - [ ] Echter Provider liefert Reaktion, äußeren Absender und Zielnachricht korrekt. 👍/👎/⏰, Hautfarbenvarianten, Wechsel und Entfernen auf Android und iOS geprüft.
@@ -47,6 +47,9 @@ Die folgenden Punkte sind die verbleibende Abnahme, keine Behauptung bereits erf
 - [ ] Persönliche Trainerübersicht ist zunächst aus, funktioniert ohne Teilnehmerregistrierung und speichert ein ausdrückliches Opt-in. Standard zehn Minuten Vorlauf; Inhalt und Vorlauf lassen sich anpassen.
 - [ ] Übersicht verwendet den aktuellen Stand beim tatsächlichen Versand. Widerruf, Rollenentzug, Terminänderung und geänderte Einstellungen sperren alte Aufträge; ein neues Opt-in löst keine rückwirkende Nachricht aus.
 - [ ] Spät zugestellte Verspätungsabfrage nennt die tatsächlich verbleibenden Minuten. Einladungen enthalten verständliche Reaktionen und Links statt interner Termin-IDs oder Befehlsanleitungen.
+
+- [ ] Termin im Web ändern und Zustellung ohne anschließende WhatsApp-Nachricht prüfen; danach nächsten Cron abwarten und auf unerwünschte Wiederholungen prüfen.
+- [ ] Minuten-Cron läuft eigenständig; `lastCron` wird ohne Browser- oder Chataktivität aktualisiert.
 
 ## Website und Betrieb
 

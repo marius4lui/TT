@@ -1,56 +1,70 @@
-﻿# TT
+# TT · Tischtennistraining über WhatsApp
 
-TT organisiert Tischtennistraining über WhatsApp. Der Worker verwaltet Trainingsserien, Ausnahmen, Rückmeldungen und Nachrichten; D1 hält den Zustand dauerhaft. Die Website bietet öffentliche Hinweise, ein freiwilliges Mitgliederkonto und den geschützten Trainerbereich. Teilnahme und Rückmeldungen brauchen kein Webkonto.
+TT organisiert Trainings, Zusagen, Absagen und Verspätungen für eure Tischtennisgruppe. Trainer verwalten Termine im Web; Mitglieder antworten in WhatsApp mit 👍, 👎 und ⏰. Ein Mitgliederkonto ist freiwillig.
 
-Das Repository ist privat. Worker, Website, EU-D1 und Cron sind unter [tt.bz3.eu](https://tt.bz3.eu) veröffentlicht. Evolution ist angeschlossen; Owner, eigene Demogruppe und Datenschutzhinweis wurden im bisherigen privaten Funktionstest bestätigt. Der Trainingsbetrieb bleibt pausiert. Die neue Verwaltung über die Website ist lokal geprüft; ihre Veröffentlichung und die vollständige Abnahme mit echten WhatsApp-Geräten stehen noch aus.
+**Eigene Installation auf Cloudflare Workers und D1**, mit einer eigenen Evolution-API-Instanz als WhatsApp-Anbindung. Die Oberfläche und die regelbasierte Chaterkennung sind deutsch. TT benötigt keinen KI-Dienst.
 
-## Anmeldung und Trainingsalltag
+## Funktionen
 
-Schreib dem Bot privat „anmelden“ oder `/login`. Du erhältst einen einmaligen, zehn Minuten gültigen Anmeldelink. Die Website zeigt zuerst deine erkannte Identität; erst dein ausdrücklicher Klick meldet dich an. Der Link ermöglicht die Anmeldung und darf nicht weitergegeben werden. Trainer mit Owner- oder Admin-Rolle gelangen direkt nach `/trainer`, ohne sich als Teilnehmer registrieren zu müssen.
+- Wöchentliche Serien und Einzeltermine, Verschiebungen, Absagen und Pausen.
+- Gruppenfreigabe, Teilnahmeübersicht und persönliche Trainerübersichten.
+- Einmalige Anmeldelinks aus WhatsApp, aktuelle Rollenprüfung und freiwillige Erinnerungen.
+- Dauerhafte Eingangs- und Versandwarteschlangen mit Schutz vor mehrfacher Verarbeitung.
+- Sofortiger Versand fälliger Nachrichten nach Webänderungen; Minuten-Cron für geplante Erinnerungen und Wiederanlauf.
+- Öffentliche Trainingsinformationen und selbst gepflegte Datenschutzhinweise.
 
-Trainer verwalten dort Serien, einzelne Termine, Verschiebungen, Absagen, Pausen, Rückmeldungen und öffentliche Hinweise. Ein Gruppenlink erzeugt zuerst eine Freigabeanfrage. Auch wenn der Bot direkt einer Gruppe hinzugefügt wird, braucht die Gruppe eine ausdrückliche Trainerfreigabe. Danach erhält sie einmalig eine Begrüßung mit „Powered by KMUC“. Trainingsnachrichten starten pausiert und werden im Trainerbereich bewusst aktiviert.
+## Selbst betreiben
 
-Mitglieder antworten mit 👍 oder 👎 auf die Trainingsabfrage und mit ⏰ auf die Verspätungsabfrage. Gruppenreaktionen erzeugen keine zusätzliche Antwortnachricht. Private Sätze wie „Ich komme zehn Minuten später“ werden anhand begrenzter deutscher Muster erkannt; bei Mehrdeutigkeit fragt TT nach. Freiwillige Registrierung und persönliche Mitgliedererinnerungen werden auf der Website getrennt bestätigt. Persönliche Trainerübersichten sind ebenfalls freiwillig und funktionieren ohne Teilnehmerregistrierung; voreingestellt sind zehn Minuten vor Beginn.
+Du benötigst einen Cloudflare-Account mit Workers und D1, Node.js 24, pnpm 11.9.0 sowie eine verbundene Evolution-API-Instanz mit eigener Botnummer und API-Key. TT stellt den Anwendungscode bereit; Cloudflare und WhatsApp bleiben externe Dienste. Ein eigenständiger Docker-/VPS-Betrieb von TT wird derzeit nicht unterstützt. Evolution wird separat betrieben oder bezogen.
 
-Websessions gelten höchstens sieben Tage; Trainersessions enden zusätzlich nach 24 Stunden ohne Aktivität. Konto, Zustimmungen und Mitgliedererinnerungen werden auf `/konto` verwaltet. Ältere Chatbefehle bleiben als Kompatibilität erhalten; der normale Ablauf führt über die Website.
-
-## Stack und Aufbau
-
-- TypeScript, Hono und Cloudflare Workers
-- Cloudflare D1 mit versionierten SQL-Migrationen
-- Evolution API als externer WhatsApp-Transport
-- pnpm Workspace und Vitest
-
-```text
-apps/worker/       HTTP-Worker, WhatsApp-Verarbeitung und Terminplanung
-apps/web/public/   Web-Assets
-packages/core/     Zeit-, Termin- und Rückmeldungsregeln
-packages/whatsapp/ Evolution-Adapter
-migrations/        D1-Schemaänderungen
-tests/             Integrationstests und Test-Hilfen
-docs/              Betrieb und Abnahme
-```
-
-## Lokale Entwicklung
-
-Voraussetzungen: Node.js 24, pnpm 11.9.0 und die private Repository-Kopie. Aus dem Repository-Stamm:
+Die vollständige Einrichtung inklusive Datenbank, Deployment, Webhook und erstem Admin steht in **[docs/SELF_HOSTING.md](docs/SELF_HOSTING.md)**. Eine eigene Domain ist optional; eine HTTPS-Adresse unter `workers.dev` genügt.
 
 ```sh
+git clone https://github.com/marius4lui/TT.git
+cd TT
 pnpm install --frozen-lockfile
 pnpm check
-pnpm db:migrate:local
 pnpm smoke
+```
+
+Die Checks und der Smoke-Test brauchen keinen Cloudflare-Account und senden keine echten WhatsApp-Nachrichten. Für die produktive Einrichtung anschließend der Hosting-Anleitung folgen. Die mitgelieferte `wrangler.jsonc` ist eine neutrale Vorlage; eigene Produktionswerte liegen in der ignorierten `wrangler.production.jsonc`.
+
+## Lokal entwickeln
+
+```sh
+pnpm db:migrate:local
 pnpm dev
 ```
 
-`pnpm check` führt Typprüfung, Tests, Operator-Tests und den Worker-Dry-Run aus. `pnpm db:migrate:local` bereitet die lokale D1-Datenbank vor. `pnpm smoke` prüft den echten lokalen Worker mit einer isolierten D1 und einem Mock-Evolution-Transport; dabei gehen keine echten WhatsApp-Nachrichten heraus. `pnpm dev` startet Wrangler.
+Die öffentliche Website läuft lokal unter `http://localhost:8787`. Der lokale Start erzeugt keine produktive WhatsApp-Verbindung. Für den vollständigen Ablauf verwendet `pnpm smoke` einen isolierten Worker, eine eigene lokale D1 und einen Evolution-Mock. `pnpm run setup --local` bereitet optional die lokale Owner-Einrichtung vor; ein echtes Login benötigt anschließend einen passenden Transport.
 
-Für echte Evolution-Aufrufe benötigt der Worker `EVOLUTION_URL`, `EVOLUTION_INSTANCE` und `EVOLUTION_API_KEY`. Lokal liest Wrangler den API-Key aus der ignorierten Datei `.dev.vars`; URL und Instanz kommen aus der Wrangler-Konfiguration. Das separate Node-Setup-Skript liest beim Remote-Verbinden alle drei Werte aus der Prozessumgebung; `.dev.vars` wird dafür nicht automatisch geladen. Zugangsdaten gehören weder in Git noch in Beispielausgaben oder Frontend-Dateien.
+| Befehl              | Zweck                                                          |
+| ------------------- | -------------------------------------------------------------- |
+| `pnpm check`        | Typen, Tests, Operator-Tests und Worker-Dry-Run                |
+| `pnpm smoke`        | Lokaler Integrationstest mit echtem workerd und Mock-Transport |
+| `pnpm format:check` | Formatierung prüfen                                            |
+| `pnpm test:watch`   | Tests während der Entwicklung                                  |
+| `pnpm build`        | Worker bauen, ohne ihn zu veröffentlichen                      |
 
-## Einrichtung und Freigabe
+## Dokumentation
 
-Die dauerhafte verschlüsselte Evolution-Eingabe startet mit `Evolution-Zugangsdaten.cmd`. Prüfung und bisherige Demoeinrichtung stehen in [docs/CREDENTIALS.md](docs/CREDENTIALS.md). Setup, Webhook und Betrieb sind in [docs/OPERATIONS.md](docs/OPERATIONS.md) beschrieben. Eine neue Instanz benötigt die einmalige Owner-Einrichtung; die bestehende Demoinstanz wird nicht neu eingerichtet.
+- [Installation und Updates](docs/SELF_HOSTING.md)
+- [Konfiguration](docs/CONFIGURATION.md)
+- [Architektur und Nachrichtenverarbeitung](docs/ARCHITECTURE.md)
+- [Betrieb, Backup und Fehlerdiagnose](docs/OPERATIONS.md)
+- [Datenspeicherung und Datenschutz](docs/PRIVACY.md)
+- [Abnahme vor Trainingsbetrieb](docs/ACCEPTANCE.md)
+- [Beiträge](CONTRIBUTING.md), [Sicherheitsmeldungen](SECURITY.md), [Änderungen](CHANGELOG.md)
+- [Stand der Open-Source-Vorbereitung](docs/OPEN_SOURCE_READINESS.md)
 
-Lokale Checks und der Mock-Smoketest sind erfolgreich gelaufen, weitere Integrationstests begleiten die neue Version. CI veröffentlicht nichts; der bekannte Abrechnungshinweis blockiert derzeit einen erfolgreichen CI-Lauf. Das bisherige Hosting wurde manuell veröffentlicht und über HTTPS geprüft. Frühere Nachweise stehen in [docs/VALIDATION.md](docs/VALIDATION.md) und gelten für die dort bezeichnete Version.
+## Grenzen und Projektstatus
 
-Den regulären Nachrichtenbetrieb erst nach geprüften Datenschutzhinweisen und erfolgreicher Abnahme mit echten WhatsApp-Geräten freigeben. Die offenen Fälle stehen in [docs/ACCEPTANCE.md](docs/ACCEPTANCE.md).
+TT ist eine frühe Version. Lokale Tests belegen nicht die Zustellung auf echten WhatsApp-Geräten. Die Kompatibilität einer Evolution-Version muss anhand der [Integrationsanforderungen](docs/SELF_HOSTING.md#evolution-api) geprüft werden; eine verifizierte Versionsmatrix liegt noch nicht vor. WhatsApp ist ein Dienst von Meta, und TT ist kein offizielles WhatsApp-Produkt. Die Regeln und Einschränkungen des verwendeten WhatsApp-Transports gelten zusätzlich.
+
+Klare deutsche Aussagen werden anhand begrenzter Muster erkannt. Mehrdeutige Angaben führen zu Rückfragen; TT versteht keine beliebige natürliche Sprache. Gruppenreaktionen erzeugen keine zusätzliche Bestätigung. Eindeutige Textmeldungen können eine kurze Antwort erhalten.
+
+## Lizenz
+
+Copyright © 2026 TT contributors. TT steht unter **[GNU AGPL-3.0-only](LICENSE)**. Die Paketmarkierung `private: true` verhindert eine versehentliche npm-Veröffentlichung und schränkt die Open-Source-Lizenz nicht ein.
+
+Wenn du eine veränderte Version als Netzwerkdienst anbietest, musst du den Nutzern nach Maßgabe der AGPL den dazugehörigen Quellcode zugänglich machen. Setze `SOURCE_URL` auf den öffentlich erreichbaren Quellcode deiner tatsächlich betriebenen Version. Die Website verlinkt ihn über „Quellcode“. [Lizenzen externer Laufzeitabhängigkeiten](THIRD_PARTY_NOTICES.md) gelten zusätzlich.

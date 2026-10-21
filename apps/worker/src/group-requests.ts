@@ -52,7 +52,7 @@ async function notifyTrainers(
     env.DB,
     'SELECT u.id,u.jid FROM users u JOIN roles r ON r.user_id=u.id',
   );
-  const origin = await setting(env.DB, 'origin', 'https://tt.bz3.eu');
+  const origin = await setting(env.DB, 'origin');
   for (const trainer of trainers) {
     if (trainer.id === requesterId) continue;
     await queue(
@@ -188,8 +188,8 @@ async function commitApproval(
       .slice(0, 80) || fallback;
   const botName = display(await setting(env.DB, 'bot_name', 'TT Bot'), 'TT Bot');
   const trainerName = display(trainer.user.display_name, 'Trainerteam');
-  const origin = await setting(env.DB, 'origin', 'https://tt.bz3.eu');
-  const welcome = `🏓 *Willkommen bei TT*\n\n*${botName}* übernimmt die Trainingsabfragen für *${trainerName}*.\n\n👍 Zusage · 👎 Absage – auf die Trainingsabfrage reagieren.\n⏰ Du kommst später? Tippe auf die ⏰-Reaktion unter der Abfrage.\nDu kannst auch schreiben: „Ich komme 10 Minuten später“.\n\nInfos und freiwillige Erinnerungen: ${origin}/info\n\n_Powered by KMUC_`;
+  const origin = await setting(env.DB, 'origin');
+  const welcome = `🏓 *Willkommen bei TT*\n\n*${botName}* übernimmt die Trainingsabfragen für *${trainerName}*.\n\n👍 Zusage · 👎 Absage – auf die Trainingsabfrage reagieren.\n⏰ Du kommst später? Tippe auf die ⏰-Reaktion unter der Abfrage.\nDu kannst auch schreiben: „Ich komme 10 Minuten später“.\n\nInfos und freiwillige Erinnerungen: ${origin}/info\n\n_Powered by TT_`;
   const members: string[] = [];
   for (const p of group.participants) {
     const user = await resolveUser(

@@ -586,6 +586,38 @@ SELECT COUNT(*) AS n FROM messages WHERE kind='invite' AND chat_jid=${quote(grou
     !sent.some((message) => message.path === `/message/sendContact/${instance}`),
     'unexpected_contact_card_spam',
   );
+  stage = 'web edit dispatch without incoming webhook or cron';
+  const currentTraining = (await sql('SELECT id,version FROM training_sessions LIMIT 1;'))[0]
+    .results[0];
+  const webOffset = sent.length;
+  const movedDate = Temporal.PlainDate.from(tomorrow).add({ days: 1 }).toString();
+  const webMove = await api(
+    `/api/v1/trainer/sessions/${currentTraining.id}/move`,
+    'POST',
+    {
+      version: currentTraining.version,
+      date: movedDate,
+      startTime: '19:00',
+    },
+    trainerCookie,
+  );
+  check(webMove.ok, 'web_move_failed');
+  await waitSent(
+    webOffset,
+    (message) => message.number === groupJid && message.text?.includes('Training verschoben'),
+  );
+  const deliveredChanges = (
+    await sql("SELECT COUNT(*) AS n FROM outbox_jobs WHERE kind='change' AND status='sent';")
+  )[0].results[0].n;
+  check(deliveredChanges === 1, 'web_change_not_delivered');
+  check((await local('/cdn-cgi/local/scheduled')).ok, 'web_change_followup_cron_failed');
+  check(
+    (await sql("SELECT COUNT(*) AS n FROM outbox_jobs WHERE kind='change' AND status='sent';"))[0]
+      .results[0].n === 1,
+    'web_change_duplicate',
+  );
+  progress('web edit delivered without another webhook; subsequent cron did not duplicate change');
+
   if (!process.argv.includes('--browser')) {
     stage = 'last-minute invitation and native clock reaction';
     const at = Date.now();

@@ -1,6 +1,6 @@
 PRAGMA foreign_keys = ON;
 CREATE TABLE settings(key TEXT PRIMARY KEY, value TEXT NOT NULL);
-INSERT INTO settings(key,value) VALUES ('origin','https://tt.bz3.eu'),('bot_name','Marius Bot'),('timezone','Europe/Berlin'),('info_text','Trainingsinformationen werden vom Trainer eingerichtet.'),('privacy_text','Die Angaben zum Verantwortlichen werden vor der Freigabe ergänzt.'),('enabled','0'),('privacy_ready','0');
+INSERT INTO settings(key,value) VALUES ('origin',''),('bot_name','TTBot'),('timezone','Europe/Berlin'),('info_text','Trainingsinformationen werden vom Trainer eingerichtet.'),('privacy_text','Die Angaben zum Verantwortlichen werden vor der Freigabe ergänzt.'),('enabled','0'),('privacy_ready','0');
 CREATE TABLE users(id TEXT PRIMARY KEY, jid TEXT NOT NULL UNIQUE, display_name TEXT NOT NULL DEFAULT '', registered_at INTEGER, reminders INTEGER NOT NULL DEFAULT 0 CHECK(reminders IN (0,1)), created_at INTEGER NOT NULL);
 CREATE TABLE identity_aliases(jid TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE);
 CREATE TABLE roles(user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE, role TEXT NOT NULL CHECK(role IN ('owner','admin')), created_at INTEGER NOT NULL);

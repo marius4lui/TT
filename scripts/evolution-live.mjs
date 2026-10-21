@@ -4,6 +4,7 @@ import { readFile, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parse, modify, applyEdits } from 'jsonc-parser';
+import { validateOrigin } from './deployment.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 export class SafeError extends Error {}
@@ -221,19 +222,27 @@ export async function main() {
   const botJid = await connection(config, api);
   console.log('Evolution-Zugang und verbundene Botinstanz erfolgreich geprüft.');
   if (action === 'setup') {
-    const path = join(root, 'wrangler.jsonc'),
+    const path = resolve(root, process.env.TT_CONFIG || 'wrangler.production.jsonc'),
       errors = [];
     let source = await readFile(path, 'utf8');
     const original = parse(source, errors, { allowTrailingComma: true });
     if (
       errors.length ||
-      original.name !== 'tt' ||
-      !original.routes?.some((route) => route.pattern === 'tt.bz3.eu' && route.custom_domain)
+      !original.name ||
+      !original.d1_databases?.some((db) => db.binding === 'DB')
     )
       throw new SafeError('Unerwartetes Worker-Konfigurationsziel.');
+    let origin;
+    try {
+      origin = validateOrigin(process.env.TT_ORIGIN);
+    } catch {
+      throw new SafeError(
+        'TT_ORIGIN muss die öffentliche HTTPS-Adresse dieser Installation enthalten.',
+      );
+    }
     const webhook = await api(`/webhook/find/${encodeURIComponent(config.instance)}`);
     const existing = webhook?.webhook ?? webhook ?? {};
-    if (existing.enabled && existing.url && existing.url !== 'https://tt.bz3.eu/webhooks/evolution')
+    if (existing.enabled && existing.url && existing.url !== `${origin}/webhooks/evolution`)
       throw new SafeError(
         'Andere Anwendung nutzt den Instanz-Webhook. Kein Deployment oder Austausch vorgenommen.',
       );
@@ -248,8 +257,12 @@ export async function main() {
         }),
       );
     await writeFile(path, source);
-    await run(join(root, 'node_modules/wrangler/bin/wrangler.js'), ['deploy']);
-    await run(join(root, 'scripts/setup.mjs'), ['--remote', '--connect', ...flags], true);
+    await run(join(root, 'node_modules/wrangler/bin/wrangler.js'), ['deploy', '--config', path]);
+    await run(
+      join(root, 'scripts/setup.mjs'),
+      ['--remote', '--connect', '--config', path, '--origin', origin, ...flags],
+      true,
+    );
     console.log(
       'Provider-Konfiguration veröffentlicht. Bootstrap privat bestätigen; Automatik bleibt bis /aktivieren pausiert.',
     );

@@ -6,5 +6,10 @@
   "exports": "./src/index.ts",
   "dependencies": {
     "@js-temporal/polyfill": "^0.5.1"
+  },
+  "license": "AGPL-3.0-only",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/marius4lui/TT.git"
   }
 }

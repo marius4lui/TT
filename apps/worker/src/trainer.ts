@@ -135,7 +135,7 @@ async function context(c: TrainerContext): Promise<BotContext> {
     eventId: `trainer:${crypto.randomUUID()}`,
     timestamp: now,
     now,
-    origin: await setting(c.env.DB, 'origin', 'https://tt.bz3.eu'),
+    origin: await setting(c.env.DB, 'origin'),
   };
 }
 interface Guard {
@@ -218,7 +218,7 @@ export function registerTrainerRoutes(app: Hono<AppBindings>): void {
     if (!session) return c.json({ error: 'unauthorized' }, 401);
     if (!session.role) return c.json({ error: 'forbidden' }, 403);
     if (!['GET', 'HEAD', 'OPTIONS'].includes(c.req.method)) {
-      const origin = await setting(c.env.DB, 'origin', 'https://tt.bz3.eu');
+      const origin = await setting(c.env.DB, 'origin');
       if (
         c.req.header('Origin') !== origin ||
         new URL(c.req.url).origin !== origin ||

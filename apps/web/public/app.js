@@ -55,7 +55,8 @@
             'Bitte prüfe die Angaben. Alle Pflichtfelder müssen vollständig ausgefüllt sein.',
           invalid_calendar: 'Die Zeiten passen nicht zusammen. Prüfe Datum, Beginn und Ende.',
           privacy_required: 'Hinterlege zuerst die Datenschutzhinweise unter Einstellungen.',
-          group_approval_required: 'Gib zuerst eine Trainingsgruppe frei und wähle sie unter Einstellungen aus.',
+          group_approval_required:
+            'Gib zuerst eine Trainingsgruppe frei und wähle sie unter Einstellungen aus.',
           group_unavailable:
             'Diese Gruppe ist derzeit nicht verfügbar. Aktualisiere die Gruppenliste.',
           consent_required: 'Bitte bestätige deine Auswahl, bevor du fortfährst.',
@@ -1713,7 +1714,9 @@
               const privacy = $('[data-create="privacy"]', root);
               privacy.open = true;
               $('#privacy-text', privacy).focus();
-              throw userError('Bitte zuerst die Datenschutzhinweise speichern und bestätigen. Danach kannst du hier aktivieren.');
+              throw userError(
+                'Bitte zuerst die Datenschutzhinweise speichern und bestätigen. Danach kannst du hier aktivieren.',
+              );
             }
             await put(route('/settings'), { enabled: !overview.settings.enabled, confirm: true });
             break;

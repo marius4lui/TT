@@ -1,0 +1,3 @@
+# Local development only. Copy to .dev.vars; never commit real keys.
+# pnpm smoke uses its own isolated mock and needs none of these values.
+EVOLUTION_API_KEY=""

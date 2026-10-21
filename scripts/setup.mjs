@@ -4,32 +4,23 @@ import { readFile } from 'node:fs/promises';
 import { parse as parseJsonc } from 'jsonc-parser';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { parseSetupArgs, validateOrigin } from './deployment.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
-const args = new Set(process.argv.slice(2));
-const remote = args.has('--remote');
-const connect = args.has('--connect');
-const flags = [
-  '--local',
-  '--remote',
-  '--connect',
-  '--reset-bootstrap',
-  '--replace-webhook',
-  '--help',
-];
+let options;
+try {
+  options = parseSetupArgs(process.argv.slice(2), root);
+} catch (error) {
+  console.error(error.message);
+  process.exit(1);
+}
+const { remote, connect, configPath } = options;
+const args = options.flags;
 if (args.has('--help')) {
   console.log(
-    `TT einrichten\n\nnode scripts/setup.mjs --local\nnode scripts/setup.mjs --remote --connect\n\n--local              Lokale Datenbank, kurzlebigen ersten Admincode erzeugen\n--remote             Bereits erstellte D1-Datenbank verwenden\n--connect            Evolution prüfen, Instanz-Webhook konfigurieren, Worker-Secret setzen\n--reset-bootstrap    Abgebrochene/abgelaufene Einrichtung bewusst neu beginnen\n--replace-webhook    Einen anderen vorhandenen Instanz-Webhook bewusst ersetzen\n\nVorher D1-Migrationen anwenden. --connect braucht EVOLUTION_URL, EVOLUTION_INSTANCE und EVOLUTION_API_KEY ausschließlich in der Prozessumgebung. Kein WhatsApp-Nachrichtenversand.\nEine abgeschlossene Owner-Einrichtung wird niemals zurückgesetzt.`,
+    `TT einrichten\n\nnode scripts/setup.mjs --local\nnode scripts/setup.mjs --remote --connect --origin https://training.example.org\n\n--config PATH        Wrangler-Konfiguration (remote: wrangler.production.jsonc)\n--origin URL         Öffentliche HTTPS-Adresse; für eine neue Remote-Datenbank erforderlich\n--local              Lokale Datenbank, kurzlebigen ersten Admincode erzeugen\n--remote             Bereits erstellte D1-Datenbank verwenden\n--connect            Evolution prüfen, Instanz-Webhook konfigurieren, Worker-Secret setzen\n--reset-bootstrap    Abgebrochene/abgelaufene Einrichtung bewusst neu beginnen\n--replace-webhook    Einen anderen vorhandenen Instanz-Webhook bewusst ersetzen\n\nVorher D1-Migrationen anwenden. --connect braucht EVOLUTION_URL, EVOLUTION_INSTANCE und EVOLUTION_API_KEY ausschließlich in der Prozessumgebung. Kein WhatsApp-Nachrichtenversand.\nEine abgeschlossene Owner-Einrichtung wird niemals zurückgesetzt.`,
   );
   process.exit(0);
-}
-if (
-  [...args].some((x) => !flags.includes(x)) ||
-  (args.has('--local') && remote) ||
-  (connect && !remote)
-) {
-  console.error('Ungültige Optionen. --connect ist nur mit --remote möglich. Siehe --help.');
-  process.exit(1);
 }
 const hash = (value) => createHash('sha256').update(value).digest('hex');
 const quote = (value) => `'${String(value).replaceAll("'", "''")}'`;
@@ -37,7 +28,7 @@ async function wrangler(argv, input) {
   return new Promise((res, rej) => {
     const child = spawn(
       process.execPath,
-      [resolve(root, 'node_modules/wrangler/bin/wrangler.js'), ...argv],
+      [resolve(root, 'node_modules/wrangler/bin/wrangler.js'), ...argv, '--config', configPath],
       {
         cwd: root,
         stdio: ['pipe', 'pipe', 'pipe'],
@@ -102,6 +93,21 @@ async function api(path, body) {
   return response.json();
 }
 try {
+  const configErrors = [];
+  const config = parseJsonc(await readFile(configPath, 'utf8'), configErrors, {
+    allowTrailingComma: true,
+  });
+  if (
+    configErrors.length ||
+    !config?.name ||
+    !config.d1_databases?.some((db) => db.binding === 'DB')
+  )
+    throw new Error('Die Wrangler-Konfiguration ist ungültig oder enthält keine DB-Bindung.');
+  const configuredOrigin = (await sql("SELECT value FROM settings WHERE key='origin';"))[0]?.value;
+  const origin = validateOrigin(
+    options.origin ?? (remote ? configuredOrigin : 'http://localhost:8787'),
+    remote,
+  );
   const state = (await sql('SELECT state,expires_at FROM bootstrap WHERE id=1;'))[0];
   const existingOwners =
     (await sql("SELECT COUNT(*) AS n FROM roles WHERE role='owner';"))[0]?.n ?? 0;
@@ -117,24 +123,13 @@ try {
   if (connect) {
     for (const name of ['EVOLUTION_URL', 'EVOLUTION_INSTANCE', 'EVOLUTION_API_KEY'])
       if (!process.env[name]) throw new Error(`${name} fehlt in der Prozessumgebung.`);
-    const configErrors = [];
-    const config = parseJsonc(
-      await readFile(resolve(root, 'wrangler.jsonc'), 'utf8'),
-      configErrors,
-      { allowTrailingComma: true },
-    );
-    if (configErrors.length)
-      throw new Error('Die wrangler.jsonc ist ungültig. Konfiguration prüfen.');
     if (
       config.vars?.EVOLUTION_URL !== process.env.EVOLUTION_URL ||
       config.vars?.EVOLUTION_INSTANCE !== process.env.EVOLUTION_INSTANCE
     )
       throw new Error(
-        'Die Werte EVOLUTION_URL und EVOLUTION_INSTANCE in wrangler.jsonc müssen vor --connect zur Prozessumgebung passen.',
+        'Die Werte EVOLUTION_URL und EVOLUTION_INSTANCE in der gewählten Wrangler-Konfiguration müssen vor --connect zur Prozessumgebung passen.',
       );
-    const origin = (await sql("SELECT value FROM settings WHERE key='origin';"))[0]?.value;
-    if (!origin || new URL(origin).protocol !== 'https:')
-      throw new Error('In der entfernten D1-Datenbank muss eine HTTPS-origin gesetzt sein.');
     const instance = encodeURIComponent(process.env.EVOLUTION_INSTANCE);
     const status = await api(`/instance/connectionState/${instance}`);
     if ((status.instance?.state ?? status.state) !== 'open')
@@ -165,7 +160,7 @@ try {
     const token = randomBytes(32).toString('hex');
     // TT remains paused. Set receiving credentials before directing provider events here.
     await sql(
-      `INSERT INTO settings(key,value) VALUES('webhook_token_hash',${quote(hash(token))}),('bot_jid',${quote(botJid)}),('enabled','0') ON CONFLICT(key) DO UPDATE SET value=excluded.value;`,
+      `INSERT INTO settings(key,value) VALUES('origin',${quote(origin)}),('webhook_token_hash',${quote(hash(token))}),('bot_jid',${quote(botJid)}),('enabled','0') ON CONFLICT(key) DO UPDATE SET value=excluded.value;`,
     );
     await wrangler(['secret', 'put', 'EVOLUTION_API_KEY'], `${process.env.EVOLUTION_API_KEY}\n`);
     await api(`/webhook/set/${instance}`, {
@@ -208,11 +203,16 @@ try {
       throw new Error(
         'Evolution hat Ereignisse oder Webhook-Routing nicht wie erwartet übernommen. TT bleibt pausiert.',
       );
-    console.log('Evolution verbunden, Webhook eingerichtet. TT bleibt bis /aktivieren pausiert.');
     console.log(
-      'EVOLUTION_URL und EVOLUTION_INSTANCE müssen außerdem in wrangler.jsonc zu dieser Instanz passen.',
+      'Evolution verbunden, Webhook eingerichtet. TT bleibt bis zur Aktivierung im Trainerbereich pausiert.',
+    );
+    console.log(
+      'EVOLUTION_URL und EVOLUTION_INSTANCE müssen außerdem in der gewählten Wrangler-Konfiguration zu dieser Instanz passen.',
     );
   }
+  await sql(
+    `INSERT INTO settings(key,value) VALUES('origin',${quote(origin)}) ON CONFLICT(key) DO UPDATE SET value=excluded.value;`,
+  );
   if (state?.state === 'completed' || existingOwners > 0) {
     console.log(
       'Ein Owner ist bereits eingerichtet. Die Ersteinrichtung bleibt dauerhaft geschlossen.',
@@ -224,13 +224,11 @@ try {
       );
     const code = randomBytes(24).toString('hex'),
       expires = Date.now() + 30 * 60000;
-    const origin = remote ? 'https://tt.bz3.eu' : 'http://localhost:8787';
     const rows = await sql(
       `INSERT INTO bootstrap(id,state,code_hash,expires_at) SELECT 1,'pending',${quote(hash(code))},${expires} WHERE NOT EXISTS(SELECT 1 FROM roles WHERE role='owner') ON CONFLICT(id) DO UPDATE SET state='pending',code_hash=excluded.code_hash,expires_at=excluded.expires_at,reserved_user_id=NULL,reservation_event_id=NULL WHERE bootstrap.state!='completed' AND NOT EXISTS(SELECT 1 FROM roles WHERE role='owner') RETURNING id;`,
     );
     if (!rows.length)
       throw new Error('Die Einrichtung wurde inzwischen abgeschlossen. Kein neuer Code erzeugt.');
-    if (!remote) await sql(`UPDATE settings SET value=${quote(origin)} WHERE key='origin';`);
     console.log('Einmaliger Einrichtungscode, 30 Minuten gültig. Nur privat an den Bot senden:');
     console.log(`/einrichten ${code}`);
     console.log('Danach JA bestätigen. Den Code nicht in Gruppen oder Git ablegen.');

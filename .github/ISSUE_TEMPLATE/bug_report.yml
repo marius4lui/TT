@@ -1,0 +1,23 @@
+name: Fehler melden
+description: Reproduzierbares Fehlverhalten ohne vertrauliche Daten melden.
+body:
+  - type: markdown
+    attributes:
+      value: Sicherheitslücken bitte gemäß SECURITY.md privat melden. Keine Tokens, Login-Links, Telefonnummern oder Chatverläufe anhängen.
+  - type: input
+    id: version
+    attributes:
+      label: TT-Version oder Commit
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Schritte, erwartetes und tatsächliches Verhalten
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Umgebung
+      description: Evolution-Version, Browser/Betriebssystem und anonymisierte Fehlerkategorie. Keine Zugangsdaten.

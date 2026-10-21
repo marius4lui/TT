@@ -7,7 +7,7 @@ import { occurrence } from '@tt/core';
 import type { Env, User } from '../apps/worker/src/types';
 
 let db: ReturnType<typeof testDb>, env: Env, member: User, now: number, cookie: string;
-const origin = 'https://tt.bz3.eu',
+const origin = 'https://tt.example.org',
   group = '120363123456@g.us',
   webhookToken = 'test-webhook-token';
 beforeEach(async () => {

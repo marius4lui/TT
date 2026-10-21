@@ -39,3 +39,13 @@ jobs:
 
       - name: Smoke test with mock Evolution
         run: pnpm smoke
+
+  windows-credentials:
+    name: Windows credential helpers
+    runs-on: windows-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test DPAPI and environment isolation with synthetic credentials
+        shell: powershell
+        run: ./scripts/tests/credentials.test.ps1
