@@ -1,6 +1,6 @@
 # Prüfstand
 
-Datum: 21. Oktober 2026. Diese Nachweise betreffen die lokale Open-Source-Vorbereitung sowie Versand nach Webänderungen, kontextabhängige Antworten, Übungsgruppen und den Login-Ablauf. Sie sind keine Aussage über den aktuellen Zustand einer produktiven Installation.
+Datum: 21. Oktober 2026. Diese Nachweise betreffen die lokale Open-Source-Vorbereitung sowie Versand nach Webänderungen, kontextabhängige Antworten, Übungsgruppen und den Login-Ablauf. Die separate Live-Prüfung steht unten.
 
 - Typprüfung und Worker-Dry-Run erfolgreich.
 - 807 Vitest-Tests in 26 Dateien erfolgreich, einschließlich Versand nach Webänderung ohne weiteren Webhook, Absage, fällig gewordener Einladung, Pausen, abgelehnter Änderungen und unklarem Provider-Ausgang.
@@ -13,10 +13,16 @@ Datum: 21. Oktober 2026. Diese Nachweise betreffen die lokale Open-Source-Vorber
 - Aus der vorherigen Open-Source-Prüfung: `pnpm audit --prod`: keine gemeldeten bekannten Schwachstellen zum Prüfzeitpunkt.
 - Aus der vorherigen Open-Source-Prüfung: Gitleaks 8.24.3: keine Treffer im bereinigten Quellbaum und in der vorhandenen Git-Historie (`--all`). Ein regelbasierter Scan ist kein Beweis für vollständige Geheimnisfreiheit und keine Prüfung auf personenbezogene Daten.
 
-Geprüft mit Node.js 24.19.0; die frische Installation wurde mit pnpm 11.9.0 geprüft. Die CI ist auf Node.js 24 und pnpm 11.9.0 eingestellt. Der Windows-DPAPI-Test ist als eigener CI-Job ergänzt; er wurde hier unter Linux nicht ausgeführt.
+Geprüft mit Node.js 24.19.0; die frische Installation wurde mit pnpm 11.9.0 geprüft. Die CI ist auf Node.js 24 und pnpm 11.9.0 eingestellt. Der Windows-DPAPI-Test läuft als eigener CI-Job; dieser ist im unten verlinkten Lauf erfolgreich.
 
-Nicht durch diese Prüfung abgedeckt: neues Cloudflare-Konto, echte Evolution-Version, WhatsApp-Endgeräte, vollständige Browser-/Barrierefreiheitsabnahme, produktiver Cronzustand und Wiederherstellung echter Daten. Dafür [ACCEPTANCE.md](ACCEPTANCE.md) auf der eigenen Installation ausfüllen. Historische private Betriebsprotokolle wurden aus dieser Datei entfernt; sie bleiben in älteren Git-Revisionen enthalten.
+Nicht durch diese Prüfung abgedeckt: neues Cloudflare-Konto, echte Evolution-Version, WhatsApp-Endgeräte, vollständige Browser-/Barrierefreiheitsabnahme, Wiederherstellung echter Daten. Dafür [ACCEPTANCE.md](ACCEPTANCE.md) auf der eigenen Installation ausfüllen. Historische private Betriebsprotokolle wurden aus dieser Datei entfernt; sie bleiben in älteren Git-Revisionen enthalten.
 
-Die Live-Freigabe wird nach Migration und Deployment gesondert dokumentiert. Die GitHub-Sichtbarkeit wurde nicht geändert.
+## Live-Freigabe am 21. Oktober 2026
 
-GitHub-CI für Commit `ae8aa74`: [Lauf 39569615781](https://github.com/marius4lui/TT/actions/runs/39569615781) startete die Prüfungen nicht. GitHub meldet fehlgeschlagene Kontozahlungen oder ein zu niedriges Ausgabenlimit. Das ist kein fehlgeschlagener Anwendungstest; die Linux-Prüfungen wurden lokal erfolgreich ausgeführt, der Windows-Job bleibt unbestätigt.
+Quellstand `86ec272` wurde nach einer lokalen, außerhalb des Repositories abgelegten Datenbanksicherung mit den Migrationen 0008 und 0009 ausgerollt. Beide Migrationen sind in der Produktionsdatenbank bestätigt. Cloudflare meldet Worker-Version `b47017cd-6b68-40bb-931f-005f8b75e776` seit 09:01:57 UTC mit 100 Prozent Auslieferung.
+
+Im Chromium-Browser geprüft: `/health` meldet `ok`; `/login` und `/trainer` liefern die neuen Oberflächen; der Hash der ausgelieferten `/app.js` stimmt mit dem lokalen geprüften Stand überein. Der produktive Minutenlauf ist nach dem Deployment erfolgreich weitergelaufen (D1-Nachweis 09:03:26 UTC). Einfache Python-HTTP-Aufrufe wurden durch Cloudflare mit Fehler 1010 blockiert; der reguläre Browserzugriff funktionierte.
+
+Die neue WhatsApp-Gruppenanlage und das Bearbeiten von Login-Nachrichten wurden lokal mit dem Evolution-Mock geprüft, noch nicht interaktiv auf echten WhatsApp-Endgeräten. Eine produktive Übungsgruppe wird erst durch die jeweilige Trainerperson im Web angelegt. Temporäre Deployment-Zugangsdaten wurden außerhalb des Repositories verwendet und danach entfernt. Die GitHub-Sichtbarkeit wurde nicht geändert.
+
+GitHub-CI für Commit `86ec272`: [Lauf 39573757875](https://github.com/marius4lui/TT/actions/runs/39573757875) erfolgreich. Sowohl „Typecheck, tests, Worker build and smoke“ als auch „Windows credential helpers“ sind grün.
