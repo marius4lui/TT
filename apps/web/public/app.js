@@ -34,6 +34,8 @@
       : {
           account_mismatch:
             'Dieser Link gehört zu einem anderen Konto. Fordere für dein angemeldetes Konto eine neue Bestätigung an.',
+          practice_invite_unavailable:
+            'Der Einladungslink ist gerade nicht verfügbar. Prüfe, ob TT noch Gruppenadmin ist, und versuche es erneut.',
           practice_phone_required:
             'TT kennt deine Telefonnummer noch nicht sicher. Schreibe dem Bot zunächst privat und versuche es erneut.',
           practice_unconfirmed:
@@ -529,7 +531,7 @@
       for (const button of $$('[data-practice-action]', root))
         button.disabled =
           busy ||
-          (['late', 'move', 'cancel', 'stop'].includes(button.dataset.practiceAction) &&
+          (['scenario', 'stop'].includes(button.dataset.practiceAction) &&
             practice?.phase !== 'active');
     };
     const practiceError = $('[data-practice-error]', root);
@@ -539,20 +541,32 @@
         practice = result.group;
         const ready = practice?.status === 'ready';
         const failed = practice?.status === 'failed';
-        $('[data-practice-status]', root).textContent = !practice
-          ? 'Deine Übungsgruppe ist noch nicht angelegt.'
+        const active = ready && practice.phase === 'active';
+        const status = !practice
+          ? 'Erstelle die Gruppe, um loszulegen.'
           : failed
-            ? 'WhatsApp hat die Gruppe nicht angelegt. Prüfe die Verbindung und versuche es erneut.'
+            ? 'WhatsApp konnte die Gruppe nicht anlegen. Versuche es nach Prüfung der Verbindung erneut.'
             : ready
-              ? practice.name +
-                (practice.phase === 'active' ? ' · Übung läuft' : ' · Bereit für eine neue Übung')
+              ? active
+                ? 'Antworte in WhatsApp. Die Rückmeldungen kannst du unten ansehen.'
+                : 'Bereit für eine neue Übung – lade dein Trainerteam ein oder starte direkt.'
               : 'Die Erstellung ist noch nicht bestätigt. Prüfe WhatsApp und tippe auf „Gruppe wiederfinden“.';
+        $('[data-practice-status]', root).textContent = status;
+        $('[data-practice-setup-status]', root).textContent = status;
+        $('[data-practice-name]', root).textContent = practice?.name || '';
+        $('[data-practice-phase]', root).textContent = active ? 'Übung läuft' : 'Bereit';
+        $('[data-practice-setup]', root).hidden = ready;
         $('[data-practice-action="create"]', root).hidden = !!practice && !failed;
         $('[data-practice-action="reconcile"]', root).hidden = !practice || ready || failed;
         $('[data-practice-controls]', root).hidden = !ready;
-        for (const action of ['late', 'move', 'cancel', 'stop'])
-          $('[data-practice-action="' + action + '"]', root).disabled =
-            practiceBusy || practice?.phase !== 'active';
+        $('[data-practice-idle]', root).hidden = active;
+        $('[data-practice-running]', root).hidden = !active;
+        const step = !ready ? 'prepare' : active || practice.version > 0 ? 'start' : 'invite';
+        for (const node of $$('[data-practice-step]', root)) {
+          if (node.dataset.practiceStep === step) node.setAttribute('aria-current', 'step');
+          else node.removeAttribute('aria-current');
+        }
+        setPracticeBusy(practiceBusy);
         $('[data-practice-delivery]', root).textContent =
           {
             sent: 'Die Übungsnachricht wurde an WhatsApp übergeben.',
@@ -568,17 +582,19 @@
         list.replaceChildren();
         for (const participant of result.participants) {
           const item = document.createElement('li');
-          item.textContent =
-            (participant.name || 'Teilnehmende Person') +
-            ': ' +
-            (participant.attendance === 'no'
+          const name = document.createElement('strong');
+          name.textContent = participant.name || 'Teilnehmende Person';
+          const response = document.createElement('span');
+          response.textContent =
+            participant.attendance === 'no'
               ? 'Abgesagt'
               : participant.attendance === 'unknown'
                 ? 'Noch offen'
                 : participant.late
                   ? 'Kommt später' +
                     (participant.minutes ? ' · ca. ' + participant.minutes + ' Minuten' : '')
-                  : 'Dabei');
+                  : 'Dabei';
+          item.append(name, response);
           list.append(item);
         }
         if (!result.participants.length) {
@@ -599,13 +615,49 @@
       try {
         if (action === 'create') await post('/api/v1/trainer/practice/create', { confirm: true });
         else if (action === 'reconcile') await post('/api/v1/trainer/practice/reconcile');
-        else if (action !== 'refresh')
-          await post('/api/v1/trainer/practice/action', { action, version: practice.version });
+        else if (action === 'invite') {
+          const { url } = await post('/api/v1/trainer/practice/invite-link');
+          if (!/^https:\/\/chat\.whatsapp\.com\/[a-zA-Z0-9_-]{20,64}$/.test(url))
+            throw new Error('practice_invite_unavailable');
+          $('[data-practice-invite-url]', root).value = url;
+          $('[data-practice-share]', root).href =
+            'https://wa.me/?text=' +
+            encodeURIComponent(
+              'Lass uns TT gemeinsam ausprobieren! Hier ist unsere Übungsgruppe: ' + url,
+            );
+          $('[data-practice-invite]', root).hidden = false;
+          $('[data-practice-invite-url]', root).focus();
+        } else if (action !== 'refresh')
+          await post('/api/v1/trainer/practice/action', {
+            action: action === 'scenario' ? $('[data-practice-scenario]', root).value : action,
+            version: practice.version,
+          });
         await loadPractice();
       } catch (error) {
         showError(practiceError, error);
       } finally {
         setPracticeBusy(false);
+      }
+    });
+    $('[data-practice-scenario]', root).addEventListener('change', (event) => {
+      $('[data-practice-scenario-hint]', root).textContent = {
+        late: 'TT fragt nach Verspätungen. Antworte in der WhatsApp-Gruppe.',
+        move: 'TT sendet eine neue Einladung. Die bisherigen Übungsantworten werden zurückgesetzt.',
+        cancel: 'TT sagt den Übungstermin ab und beendet die Runde.',
+      }[event.target.value];
+    });
+    $('[data-practice-copy]', root).addEventListener('click', async () => {
+      const input = $('[data-practice-invite-url]', root);
+      if (!input.value) return;
+      try {
+        await navigator.clipboard.writeText(input.value);
+        $('[data-practice-copy-status]', root).textContent =
+          'Link kopiert. Du kannst ihn jetzt an dein Trainerteam schicken.';
+      } catch {
+        input.focus();
+        input.select();
+        $('[data-practice-copy-status]', root).textContent =
+          'Der Link ist markiert. Kopiere ihn über das Menü deines Geräts.';
       }
     });
     $('[data-practice-preview]', root).addEventListener('submit', async (event) => {
@@ -1416,15 +1468,6 @@
             : (index + (event.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length;
       switchView(tabs[next].dataset.view, true);
     });
-    try {
-      await load();
-      switchView(location.hash.slice(1) || 'overview');
-      if (location.hash !== '#requests') loadRequests();
-    } catch (error) {
-      root.setAttribute('aria-busy', 'false');
-      showError(errorNode, error);
-    }
-
     root.addEventListener('click', async (event) => {
       const target = event.target.closest('[data-view], [data-action]');
       if (!target) return;
@@ -1924,6 +1967,14 @@
         setBusy(form, false);
       }
     });
+    try {
+      await load();
+      switchView(location.hash.slice(1) || 'overview');
+      if (location.hash !== '#requests') loadRequests();
+    } catch (error) {
+      root.setAttribute('aria-busy', 'false');
+      showError(errorNode, error);
+    }
   }
 
   document.addEventListener('DOMContentLoaded', () => {

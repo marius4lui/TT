@@ -258,6 +258,8 @@ try {
               : []),
           ]),
         );
+      } else if (request.url.startsWith(`/group/inviteCode/${instance}?groupJid=`)) {
+        response.end(JSON.stringify({ inviteCode: 'LocalTrainerPracticeInviteCode' }));
       } else if (request.url === `/group/inviteInfo/${instance}?inviteCode=${inviteCode}`) {
         response.end(JSON.stringify({ id: invitedGroup, subject: 'TT Einladungstest' }));
       } else if (request.url === `/group/acceptInviteCode/${instance}?inviteCode=${inviteCode}`) {
@@ -707,7 +709,19 @@ SELECT COUNT(*) AS n FROM messages WHERE kind='invite' AND chat_jid=${quote(grou
     await sql(`SELECT COUNT(*) AS n FROM groups WHERE jid=${quote(practiceGroups[0].id)};`)
   )[0];
   check(livePractice.results[0].n === 0, 'practice_leaked_into_live_groups');
-  progress('login-message edits and isolated practice creation verified');
+  const practiceInvite = await api(
+    '/api/v1/trainer/practice/invite-link',
+    'POST',
+    {},
+    trainerCookie,
+  );
+  check(
+    practiceInvite.status === 200 &&
+      (await practiceInvite.json()).url ===
+        'https://chat.whatsapp.com/LocalTrainerPracticeInviteCode',
+    'practice_invitation_failed',
+  );
+  progress('login-message edits, isolated practice creation and trainer invite link verified');
   progress('PASS — local Worker, D1, cron, Evolution mock, reactions and authentication');
   if (process.argv.includes('--browser')) {
     // Hold the exact tested Worker/D1 for authorized browser acceptance; no UI mocks

@@ -445,6 +445,19 @@ export class EvolutionClient {
     return object(await this.request(`/webhook/find/${this.instance}`)) ?? {};
   }
 
+  async groupInviteLink(groupJid: string): Promise<string> {
+    if (!normalizeJid(groupJid)?.endsWith('@g.us')) throw new TransportError('permanent');
+    const result = object(
+      await this.request(
+        `/group/inviteCode/${this.instance}?groupJid=${encodeURIComponent(groupJid)}`,
+      ),
+    );
+    const code = string(result?.inviteCode);
+    if (!code || !/^[a-zA-Z0-9_-]{20,64}$/.test(code)) throw new TransportError('permanent');
+    // Construct the trusted destination; never expose arbitrary provider URLs.
+    return `https://chat.whatsapp.com/${code}`;
+  }
+
   async inviteInfo(code: string): Promise<{ id: string; subject: string }> {
     if (!/^[a-zA-Z0-9_-]{20,64}$/.test(code)) throw new TransportError('permanent');
     const result = object(

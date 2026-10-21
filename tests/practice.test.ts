@@ -301,3 +301,39 @@ it('does not wake production deliveries from a text preview or exercise action',
       .every(([, options]) => JSON.parse(options.body).number === group),
   ).toBe(true);
 });
+
+it('provides the owning trainer a shareable group link without sending a message', async () => {
+  await start();
+  const before = await db.prepare('SELECT COUNT(*) n FROM outbox_jobs').first('n');
+  fetcher.mockResolvedValueOnce(
+    new Response(
+      JSON.stringify({
+        inviteCode: 'TrainerPracticeInviteCode',
+        inviteUrl: 'https://untrusted.invalid/ignore',
+      }),
+    ),
+  );
+  const response = await request('/invite-link', {});
+  expect(response.status).toBe(200);
+  expect(response.headers.get('Cache-Control')).toBe('no-store');
+  expect(await response.json()).toEqual({
+    url: 'https://chat.whatsapp.com/TrainerPracticeInviteCode',
+  });
+  expect(fetcher.mock.calls.at(-1)![0]).toContain('/group/inviteCode/test?groupJid=');
+  expect(await db.prepare('SELECT COUNT(*) n FROM outbox_jobs').first('n')).toBe(before);
+  expect(await db.prepare('SELECT COUNT(*) n FROM roles').first('n')).toBe(1);
+});
+it('does not expose another trainer’s group invitation or trust invalid provider data', async () => {
+  expect((await request('/invite-link', {}, false)).status).toBe(401);
+  expect((await request('/invite-link', {})).status).toBe(409);
+  expect(fetcher).not.toHaveBeenCalled();
+  await start();
+  fetcher.mockResolvedValueOnce(new Response(JSON.stringify({ inviteCode: 'bad/code?secret' })));
+  const response = await request('/invite-link', {});
+  expect(response.status).toBe(502);
+  expect(await response.text()).not.toContain('bad/code');
+  await db.prepare('UPDATE practice_groups SET owner_id=NULL').run();
+  const calls = fetcher.mock.calls.length;
+  expect((await request('/invite-link', {})).status).toBe(409);
+  expect(fetcher.mock.calls.length).toBe(calls);
+});

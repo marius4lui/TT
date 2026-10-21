@@ -4,6 +4,9 @@
 
 ### Neu
 
+- Trainer über einen kopierbaren oder in WhatsApp teilbaren Link zur eigenen Übungsgruppe einladen.
+- Übungsmenü mit drei klaren Schritten, einer Situationsauswahl statt vieler Aktionsknöpfe und eingeklappter Textprobe.
+
 - Eigene Übungsgruppe pro Trainerperson unter Mehr: Gruppenanlage, Einladung, Verspätung, Verschiebung, Absage und Textprobe mit isolierten Rückmeldungen.
 
 ### Behoben

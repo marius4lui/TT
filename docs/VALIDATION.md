@@ -3,7 +3,7 @@
 Datum: 21. Oktober 2026. Diese Nachweise betreffen die lokale Open-Source-Vorbereitung sowie Versand nach Webänderungen, kontextabhängige Antworten, Übungsgruppen und den Login-Ablauf. Die separate Live-Prüfung steht unten.
 
 - Typprüfung und Worker-Dry-Run erfolgreich.
-- 815 Vitest-Tests in 26 Dateien erfolgreich, einschließlich Versand nach Webänderung ohne weiteren Webhook, Absage, fällig gewordener Einladung, Pausen, abgelehnter Änderungen und unklarem Provider-Ausgang.
+- 818 Vitest-Tests in 26 Dateien erfolgreich, einschließlich Versand nach Webänderung ohne weiteren Webhook, Absage, fällig gewordener Einladung, Pausen, abgelehnter Änderungen und unklarem Provider-Ausgang.
 - Zusätzliche Regressionen: Kurzantworten mit/ohne Kontext, deutsche Unicode-Zeichen, bestehende Sitzungen bei abgelaufenen Links, explizite Neuanmeldung, Bearbeitung der Login-Nachricht, isolierte Übungsdaten, unklare Gruppenanlage, Rollenentzug und atomare Rückmeldung mit Versandauftrag.
 - Neun Operator-Tests erfolgreich: Konfigurationsauswahl, Origin-Validierung, Transportfehler und Demo-Journal.
 - Formatprüfung und Prüfung lokaler Markdown-Verweise erfolgreich.
@@ -32,3 +32,7 @@ GitHub-CI für Commit `86ec272`: [Lauf 39573757875](https://github.com/marius4lu
 Quellstand `02050a7` wurde als Worker-Version `a37535f5-12a0-4b64-af68-293d653611a2` ausgerollt. Keine neue Datenbankmigration war nötig. Lokale Typprüfung, 815 Tests, Operator-Tests, Worker-Build, Formatprüfung und kompletter Smoke erfolgreich. Neue Prüfungen decken Teilnehmerfragen, unveränderte Teilnahme beim Lesen, Gruppentrennung im privaten Chat, genau einen Info-Link und die Uhr ausschließlich als Reaktion in der Verspätungserinnerung ab. Nach dem Deployment meldet der öffentliche Health-Endpunkt im Chromium-Browser `ok`; Login und Trainerbereich antworten erfolgreich.
 
 [CI-Lauf für diesen Quellstand](https://github.com/marius4lui/TT/actions/runs/39575606499). Bereits verschickte WhatsApp-Nachrichten werden durch das Deployment nicht rückwirkend umformatiert.
+
+## Nachtrag: Trainer einladen und geführte Übung
+
+Lokale Typprüfung, 818 Vitest-Tests, neun Operator-Tests, Worker-Build und kompletter Smoke erfolgreich. Die neuen Prüfungen sichern den Einladungslink auf die eigene Übungsgruppe ab und verwerfen ungültige Provider-Antworten. Im Chromium-Browser geprüft: Link kopieren, vorbereiteter WhatsApp-Teillink, Start/Ende, alle drei Situationen, eingeklappte Textprobe sowie Desktop und Mobilbreiten von 390 und 320 Pixeln ohne horizontalen Überlauf. Der Teillink wurde geprüft, aber keine Einladung an echte Empfänger versendet.

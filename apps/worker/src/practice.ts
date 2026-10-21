@@ -179,6 +179,23 @@ export function registerPracticeRoutes(app: Hono<AppBindings>): void {
       .run();
     return c.json({ ok: true });
   });
+  router.post('/invite-link', async (c) => {
+    const p = await ownGroup(c.env.DB, c.get('owner'));
+    if (!p || p.status !== 'ready' || !p.group_jid)
+      return c.json({ error: 'group_unavailable' }, 409);
+    try {
+      const url = await evolution(c.env).groupInviteLink(p.group_jid);
+      if (
+        !(await c.env.DB.prepare('SELECT 1 FROM roles WHERE user_id=?')
+          .bind(c.get('owner'))
+          .first())
+      )
+        return c.json({ error: 'forbidden' }, 403);
+      return c.json({ url });
+    } catch {
+      return c.json({ error: 'practice_invite_unavailable' }, 502);
+    }
+  });
   router.post('/action', async (c) => {
     const input = z
       .object({

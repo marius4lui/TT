@@ -90,7 +90,9 @@ const deliveryAfterWrite: import('hono').MiddlewareHandler<AppBindings> = async 
   await next();
   if (
     !['GET', 'HEAD', 'OPTIONS'].includes(c.req.method) &&
-    c.req.path !== '/api/v1/trainer/practice/preview' &&
+    !['/api/v1/trainer/practice/preview', '/api/v1/trainer/practice/invite-link'].includes(
+      c.req.path,
+    ) &&
     c.res.status >= 200 &&
     c.res.status < 300 &&
     c.env.EVOLUTION_API_KEY

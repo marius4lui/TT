@@ -390,3 +390,32 @@ describe('editing login messages and creating exercise groups', () => {
     });
   });
 });
+
+it('fetches practice invite codes only for groups and constructs a trusted WhatsApp link', async () => {
+  const fetcher = vi.fn<typeof fetch>(
+    async () =>
+      new Response(
+        JSON.stringify({
+          inviteCode: 'TrainerPracticeInviteCode',
+          inviteUrl: 'https://wrong.invalid',
+        }),
+      ),
+  );
+  const client = new EvolutionClient({
+    url: 'https://provider.invalid',
+    instance: 'test',
+    apiKey: 'fixture',
+    fetch: fetcher,
+  });
+  expect(await client.groupInviteLink('123456@g.us')).toBe(
+    'https://chat.whatsapp.com/TrainerPracticeInviteCode',
+  );
+  expect(fetcher.mock.calls[0][0]).toBe(
+    'https://provider.invalid/group/inviteCode/test?groupJid=123456%40g.us',
+  );
+  expect(fetcher.mock.calls[0][1]!.method).toBe('GET');
+  await expect(client.groupInviteLink('491701111111@s.whatsapp.net')).rejects.toMatchObject({
+    kind: 'permanent',
+  });
+  expect(fetcher).toHaveBeenCalledTimes(1);
+});
