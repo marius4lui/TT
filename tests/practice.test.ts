@@ -337,3 +337,62 @@ it('does not expose another trainer’s group invitation or trust invalid provid
   expect((await request('/invite-link', {})).status).toBe(409);
   expect(fetcher.mock.calls.length).toBe(calls);
 });
+
+it('answers statistics in practice with isolated live counts and explicitly fictional history', async () => {
+  await start();
+  await incoming('Ich komme 10 Minuten später');
+  const before = await db.prepare('SELECT state FROM practice_attendance').first('state');
+  await incoming('Stats', { id: 'practice-stats' });
+  await incoming('Stats', { id: 'practice-stats' });
+  const jobs = (
+    await db
+      .prepare("SELECT text FROM outbox_jobs WHERE dedupe_key LIKE '%:practice-stats'")
+      .all<{ text: string }>()
+  ).results;
+  expect(jobs).toHaveLength(1);
+  expect(jobs[0].text).toContain('Zusagen: 1');
+  expect(jobs[0].text).toContain('verspätet zugesagt: 1');
+  expect(jobs[0].text).toContain('erfundene Beispielpersonen');
+  for (const period of ['1 Monat', '6 Monate', '12 Monate']) expect(jobs[0].text).toContain(period);
+  expect(await db.prepare('SELECT state FROM practice_attendance').first('state')).toBe(before);
+  expect(await db.prepare('SELECT COUNT(*) n FROM training_sessions').first('n')).toBe(0);
+  expect(await db.prepare('SELECT COUNT(*) n FROM attendance').first('n')).toBe(0);
+  await sendOutbox(env, now);
+  expect(
+    await db
+      .prepare("SELECT status FROM outbox_jobs WHERE dedupe_key LIKE '%:practice-stats'")
+      .first('status'),
+  ).toBe('sent');
+});
+it('supports period aliases and reflects reversals without manufacturing historical points', async () => {
+  await start();
+  await incoming('Kann nicht');
+  await incoming('/stats 6 Monate', { id: 'six' });
+  const text = await db
+    .prepare("SELECT text FROM outbox_jobs WHERE dedupe_key LIKE '%:six'")
+    .first<string>('text');
+  expect(text).toContain('Absagen: 1');
+  expect(text).toContain('*Demo · 6 Monate*');
+  expect(text).not.toContain('*Demo · 12 Monate*');
+  await incoming('Kann doch');
+  await incoming('Analysen', { id: 'analysis' });
+  expect(
+    await db
+      .prepare("SELECT text FROM outbox_jobs WHERE dedupe_key LIKE '%:analysis'")
+      .first('text'),
+  ).toContain('Zusagen: 1');
+});
+it('does not deliver a queued demo ranking after the round has ended', async () => {
+  await start();
+  await incoming('Stats', { id: 'pending-stats' });
+  await request('/action', { action: 'stop', version: (await state()).group.version });
+  await sendOutbox(env, now);
+  expect(
+    await db
+      .prepare("SELECT status FROM outbox_jobs WHERE dedupe_key LIKE '%:pending-stats'")
+      .first('status'),
+  ).not.toBe('sent');
+  const count = await db.prepare('SELECT COUNT(*) n FROM outbox_jobs').first('n');
+  await incoming('Stats');
+  expect(await db.prepare('SELECT COUNT(*) n FROM outbox_jobs').first('n')).toBe(count);
+});

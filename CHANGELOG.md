@@ -14,6 +14,8 @@
 
 ### Behoben
 
+- `Stats`, `/stats` und `Analysen` antworten auch in aktiven Übungsgruppen: aktuelle Übungsantworten und klar gekennzeichnete fiktive Beispielranglisten, vollständig getrennt von echten Trainings.
+
 - Trainingseinladungen zeigen Datum, Zeit und Ort auf eigenen Zeilen, einen einzelnen Link zu den Trainingsinfos und den Hinweis auf „Wer kommt?“.
 - Verspätungserinnerungen wiederholen das Uhr-Symbol nicht im Text; die anklickbare Reaktion bleibt erhalten. Trainerübersichten verwenden übersichtliche Zahlenzeilen.
 - „Wer kommt?“ und verwandte Fragen liefern eine lesbare Zusagenliste mit Verspätungen. Private Fragen berücksichtigen ausschließlich eigene aktive Gruppen und fragen bei mehreren Gruppen nach.

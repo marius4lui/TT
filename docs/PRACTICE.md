@@ -33,3 +33,7 @@ Normales Training und Übungen verwenden dieselbe deutsche Spracherkennung und d
 Für eigene Installationen benötigt der Evolution-Account neben dem Nachrichtenversand die Gruppenanlage über `POST /group/create/{instance}`. Es werden keine zusätzlichen Cloudflare-Dienste benötigt.
 
 Für den Einladungslink benötigt TT Gruppenadminrechte und den Evolution-Endpunkt `GET /group/inviteCode/{instance}`. Es wird nur der Link der eigenen Übungsgruppe abgefragt; der Link wird nicht dauerhaft in TT gespeichert und löst keinen automatischen Nachrichtenversand aus.
+
+## Statistiken in der Übung
+
+Auch `Stats`, `/stats` und `Analysen` funktionieren während einer aktiven Übungsrunde. Die Antwort zeigt die aktuellen Übungszusagen, Absagen und Verspätungen. Zusätzlich zeigen ausdrücklich erfundene Beispielpersonen die Ranglisten für einen, sechs und zwölf Monate einschließlich Gleichstand. Mit `/stats 6 Monate` lässt sich ein Zeitraum gezielt ausprobieren. Es werden weder echte Trainingsdaten gelesen noch historische Teilnahmen erfunden oder gespeichert. Trainer dürfen bei den aktuellen Übungsantworten mitmachen; in echten Ranglisten bleiben sie ausgeschlossen. Nach Ende oder Neustart gelten die bisherigen Übungsdaten nicht mehr.

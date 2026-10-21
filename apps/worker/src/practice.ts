@@ -12,6 +12,7 @@ import { TransportError, type MessageEvent } from '@tt/whatsapp';
 import { getSession } from './auth';
 import { all, setting } from './db';
 import { evolution } from './outbox';
+import { parseStatisticsRequest } from './statistics';
 import type { AppBindings, Env } from './types';
 
 interface Practice {
@@ -69,7 +70,7 @@ function job(
 }
 const intro = '🧪 *TT-Übung – kein echtes Training*';
 const invitation = (changed = false) =>
-  `${intro}\n${changed ? 'Der Übungstermin wurde verschoben. Bitte antworte erneut.' : 'Hier kannst du TT in Ruhe ausprobieren.'}\n\n👍 Ich komme\n👎 Ich komme nicht\n⏰ Ich komme später\n\nReagiere auf diese Nachricht oder schreibe zum Beispiel „Kann nicht“ und danach „Kann doch“. Eure Rückmeldungen gelten nur für diese Übung. Sie endet automatisch nach einer Stunde.`;
+  `${intro}\n${changed ? 'Der Übungstermin wurde verschoben. Bitte antworte erneut.' : 'Hier kannst du TT in Ruhe ausprobieren.'}\n\n👍 Ich komme\n👎 Ich komme nicht\n⏰ Ich komme später\n\nReagiere auf diese Nachricht oder schreibe zum Beispiel „Kann nicht“ und danach „Kann doch“. Eure Rückmeldungen gelten nur für diese Übung. Sie endet automatisch nach einer Stunde. Mit „Stats“ oder „/stats 6 Monate“ kannst du auch die Auswertung ausprobieren.`;
 
 export function registerPracticeRoutes(app: Hono<AppBindings>): void {
   const router = new Hono<AppBindings & { Variables: { owner: string; jid: string } }>();
@@ -320,6 +321,33 @@ export async function processPracticeMessage(
       .first<{ kind: string }>();
     if (!row) return true;
     targetKind = row.kind;
+  }
+  const statistics = !event.reaction && parseStatisticsRequest(event.text ?? '');
+  if (statistics) {
+    const rows = await all<{ state: string }>(
+      env.DB,
+      'SELECT state FROM practice_attendance WHERE group_id=? AND version=?',
+      p.id,
+      p.version,
+    );
+    const answers = rows.map((row) => JSON.parse(row.state) as AttendanceState);
+    const yes = answers.filter((answer) => answer.attendance === 'yes').length;
+    const no = answers.filter((answer) => answer.attendance === 'no').length;
+    const late = answers.filter((answer) => answer.attendance === 'yes' && answer.late).length;
+    const examples = { 1: [4, 3, 3], 6: [24, 21, 21], 12: [48, 42, 42] };
+    const text = [
+      `${intro}\n*Statistik ausprobieren*`,
+      `*Aktuelle Übungsrunde*\nZusagen: ${yes}\nAbsagen: ${no}\nDavon verspätet zugesagt: ${late}\nHier können auch Trainer mitüben. Diese Antworten zählen nicht für echte Ranglisten.`,
+      'Die folgenden Ranglisten zeigen ausschließlich erfundene Beispielpersonen und Beispielwerte. Die Übung speichert keine Monats- oder Jahreshistorie.',
+      ...statistics.months.map((months) => {
+        const [first, second, third] = examples[months];
+        return `*Demo · ${months === 1 ? '1 Monat' : `${months} Monate`}*\n1. Beispielperson A: ${first}\n2. Beispielperson B: ${second}\n2. Beispielperson C: ${third}`;
+      }),
+      'Im echten Training zählen Zusagen nach Trainingsende, mit optionalen Trainerkorrekturen. Trainer und Bot sind ausgeschlossen. Gleiche Punktzahl = gleicher Rang.',
+      'Zum Ausprobieren: „Kann nicht“, danach „Kann doch“ schreiben und erneut „Stats“ fragen. Gezielt: /stats 6 Monate.',
+    ].join('\n\n');
+    await job(env.DB, p, event.id, 'practice_reply', text, now).run();
+    return true;
   }
   for (let retry = 0; retry < 4; retry++) {
     const old = await env.DB.prepare(
