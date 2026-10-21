@@ -2972,3 +2972,54 @@ summary::-webkit-details-marker {
   margin-top: 2rem;
   scroll-margin-top: 2rem;
 }
+
+.reading-page > main.statistics-page {
+  max-width: 820px;
+  margin: 0 auto;
+  padding: 32px 20px;
+}
+.statistics-periods {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 24px 0;
+}
+.statistics-periods [aria-current='page'] {
+  background: #192e28;
+  color: #fff;
+}
+.statistics-card {
+  padding: 16px;
+  overflow-x: auto;
+}
+.statistics-card table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 15px;
+}
+.statistics-card caption {
+  text-align: left;
+  font-weight: 600;
+  padding-bottom: 16px;
+}
+.statistics-card th,
+.statistics-card td {
+  padding: 12px 8px;
+  border-bottom: 1px solid #e0e8df;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+.statistics-card th:last-child,
+.statistics-card td:last-child {
+  text-align: right;
+}
+@media (max-width: 400px) {
+  .statistics-card {
+    padding: 10px;
+  }
+  .statistics-card th,
+  .statistics-card td {
+    padding: 10px 4px;
+    font-size: 13px;
+  }
+}

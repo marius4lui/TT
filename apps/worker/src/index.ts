@@ -11,6 +11,7 @@ import { recordAttendance } from './bot';
 import { label, type Training } from './training';
 import { renderPage } from './pages';
 import { registerPracticeRoutes } from './practice';
+import { registerStatisticsRoutes } from './statistics-links';
 import { registerTrainerRoutes } from './trainer';
 import { registerGroupRequestRoutes } from './group-requests';
 import { planTrainerSummaries } from './trainer-summary';
@@ -114,6 +115,7 @@ app.use('/api/v1/auth/magic/finish', deliveryAfterWrite);
 registerAuthRoutes(app);
 registerGroupRequestRoutes(app);
 registerPracticeRoutes(app);
+registerStatisticsRoutes(app);
 registerTrainerRoutes(app);
 // Operators running a modified version must point this at its corresponding source.
 app.get('/source', (c) => {

@@ -3,7 +3,7 @@ import type { Env } from './types';
 import { all, setting } from './db';
 import { label, materialize, type Training } from './training';
 import { renderTrainerSummary, type SummaryRow } from './trainer-summary';
-import { renderGroupStatistics } from './statistics';
+import { linkedStatisticsReply } from './statistics-links';
 
 export interface Job {
   id: string;
@@ -379,7 +379,13 @@ export async function sendOutbox(
         if (j.kind === 'statistics') {
           const payload = statisticsPayload(j);
           if (!payload) throw new TransportError('permanent');
-          text = await renderGroupStatistics(env.DB, payload.groupJid, now, payload.months);
+          text = await linkedStatisticsReply(
+            env.DB,
+            payload.groupJid,
+            j.user_id!,
+            now,
+            payload.months,
+          );
         }
         if (
           j.session_id &&

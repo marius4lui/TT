@@ -72,6 +72,10 @@ describe('statistics personal data lifecycle', () => {
   it('exports only the requesting member corrections in WhatsApp and HTTP', async () => {
     await fixture('own', now - day);
     await fixture('someone-else', now - day, 'other');
+    await db
+      .prepare("INSERT INTO group_first_names VALUES('g','member','Anna',?),('g','other','Ben',?)")
+      .bind(now, now)
+      .run();
     const user = (await db.prepare("SELECT * FROM users WHERE id='member'").first<User>())!;
     const ctx: BotContext = {
       env,
@@ -93,12 +97,14 @@ describe('statistics personal data lifecycle', () => {
       env,
     );
     expect(response.status).toBe(200);
-    const web = (await response.json()) as { presence: unknown[] };
+    const web = (await response.json()) as { presence: unknown[]; firstNames: unknown[] };
     const expected = [
       { session_id: 'own', state: 'absent', updated_at: now, confirmed_by: 'trainer' },
     ];
     expect(chat.presence).toEqual(expected);
     expect(web.presence).toEqual(expected);
+    expect(chat.firstNames).toEqual([{ group_jid: 'g', first_name: 'Anna', updated_at: now }]);
+    expect(web.firstNames).toEqual(chat.firstNames);
   });
 
   it('clears trainer attribution without losing member correction, then cascades member deletion', async () => {

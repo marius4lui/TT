@@ -18,7 +18,7 @@ import type { Env, BotContext, User } from './types';
 import { evolution, queue } from './outbox';
 import { requestGroupLink } from './group-requests';
 import { answerTrainingQuestion } from './questions';
-import { answerStatistics } from './statistics';
+import { answerStatistics, statisticsFirstName } from './statistics';
 import {
   dateInZone,
   findTraining,
@@ -1043,6 +1043,16 @@ export async function processMessage(
     )
       .bind(event.chatJid, user.id, event.timestamp)
       .run();
+  if (event.isGroup && event.displayName) {
+    const first = statisticsFirstName(event.displayName);
+    await env.DB.prepare(
+      `INSERT INTO group_first_names(group_jid,user_id,first_name,updated_at) VALUES(?,?,?,?)
+      ON CONFLICT(group_jid,user_id) DO UPDATE SET first_name=excluded.first_name,updated_at=excluded.updated_at
+      WHERE excluded.updated_at>group_first_names.updated_at`,
+    )
+      .bind(event.chatJid, user.id, first, event.timestamp)
+      .run();
+  }
   if (event.reaction) {
     const target = await env.DB.prepare('SELECT * FROM messages WHERE id=? AND chat_jid=?')
       .bind(event.reaction.targetId, event.chatJid)

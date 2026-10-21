@@ -753,7 +753,7 @@ export async function handleAccountMessage(ctx: BotContext): Promise<string[] | 
       `Konto: ${ctx.user.registered_at ? 'registriert' : 'nicht registriert'}\nName: ${ctx.user.display_name || 'nicht hinterlegt'}\nErinnerungen: ${ctx.user.reminders ? 'an' : 'aus'}\nRolle: ${(await getRole(db, ctx.user.id)) ?? 'Mitglied'}\n/daten zeigt gespeicherte Daten. /löschen startet die Kontolöschung.`,
     ];
   if (command === '/daten') {
-    const [aliases, memberships, attendance, presence, consents] = await Promise.all([
+    const [aliases, memberships, attendance, presence, firstNames, consents] = await Promise.all([
       all(db, 'SELECT jid FROM identity_aliases WHERE user_id=?', ctx.user.id),
       all(db, 'SELECT group_jid,active,updated_at FROM memberships WHERE user_id=?', ctx.user.id),
       all(
@@ -764,6 +764,11 @@ export async function handleAccountMessage(ctx: BotContext): Promise<string[] | 
       all(
         db,
         'SELECT session_id,state,updated_at,confirmed_by FROM session_presence WHERE user_id=?',
+        ctx.user.id,
+      ),
+      all(
+        db,
+        'SELECT group_jid,first_name,updated_at FROM group_first_names WHERE user_id=?',
         ctx.user.id,
       ),
       all(
@@ -780,6 +785,7 @@ export async function handleAccountMessage(ctx: BotContext): Promise<string[] | 
         memberships,
         attendance,
         presence,
+        firstNames,
         consents,
       },
       null,

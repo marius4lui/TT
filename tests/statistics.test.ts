@@ -90,7 +90,7 @@ async function presence(sessionId: string, userId: string, state: string) {
 describe('statistics parsing and calendar periods', () => {
   it('recognizes explicit aliases and rejects surrounding conversation', () => {
     for (const text of ['Stats', '/stats', 'Analysen', ' /STATS! ', '/Analysen'])
-      expect(parseStatisticsRequest(text)?.months).toEqual([1, 6, 12]);
+      expect(parseStatisticsRequest(text)?.months).toEqual([6]);
     expect(parseStatisticsRequest('/stats 6 monate')?.months).toEqual([6]);
     expect(parseStatisticsRequest('Statistik Jahr')?.months).toEqual([12]);
     expect(parseStatisticsRequest('/stats monat')?.months).toEqual([1]);
@@ -215,11 +215,12 @@ describe('statistics ranking', () => {
       .run();
     const text = (await answerStatistics(ctx))?.text;
     expect(text).toContain('Nach Zusagen, mit Trainerkorrekturen');
-    expect(text).toContain('nur teilweise erfasst');
-    expect(text).toContain('Kein abschließendes Ergebnis');
-    expect(text).toContain('1. Name fake: 1');
+    expect(text).toContain('Ältere Daten fehlen');
+    expect(text).toContain('vorläufig');
+    expect(text).toContain('1. Mitglied · 1×');
+    expect(text).not.toContain('Name fake');
     expect(text).not.toContain('@s.whatsapp.net');
-    expect(text?.match(/nur teilweise erfasst/g) || []).toHaveLength(2);
+    expect(text?.match(/Ältere Daten fehlen/g) || []).toHaveLength(1);
   });
   it('routes aliases once without changing responses or conversations', async () => {
     await session('one');

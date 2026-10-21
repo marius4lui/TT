@@ -155,7 +155,7 @@ async function waitSent(offset, predicate, timeout = 15000) {
 }
 async function webhook(sender, text, extra = {}) {
   eventClock = Math.max(Date.now(), eventClock + 1);
-  const group = extra.group === true;
+  const group = extra.group === true || !!extra.groupJid;
   const response = await local('/webhooks/evolution', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${webhookToken}` },
@@ -167,7 +167,7 @@ async function webhook(sender, text, extra = {}) {
         key: {
           id: randomUUID(),
           fromMe: false,
-          remoteJid: group ? groupJid : sender,
+          remoteJid: group ? (extra.groupJid ?? groupJid) : sender,
           ...(group ? { participant: sender } : {}),
         },
         messageTimestamp: eventClock,
@@ -733,6 +733,32 @@ SELECT COUNT(*) AS n FROM messages WHERE kind='invite' AND chat_jid=${quote(grou
     statsBefore.text.includes('Nach Zusagen') && statsBefore.text.includes('1.'),
     'statistics_ranking_missing',
   );
+  const statisticsUrl = statsBefore.text.match(/https?:\/\/\S+\/s\/[A-Za-z0-9_-]{22}/)?.[0];
+  check(!!statisticsUrl && statsBefore.text.length < 450, 'short_statistics_missing');
+  const tableResponse = await fetch(statisticsUrl);
+  check(
+    tableResponse.ok && tableResponse.headers.get('X-Robots-Tag')?.includes('noindex'),
+    'statistics_table_unavailable',
+  );
+  const tableHtml = await tableResponse.text();
+  check(
+    tableHtml.includes('vollständige Rangliste') && !tableHtml.includes('Smoke Mitglied'),
+    'statistics_first_name_failed',
+  );
+  const demoOffset = sent.length;
+  await webhook(ownerJid, 'Stats', { groupJid: practiceGroups[0].id });
+  const demoReply = await waitSent(
+    demoOffset,
+    (message) =>
+      message.number === practiceGroups[0].id && message.text?.includes('Demo-Statistik'),
+  );
+  const demoStatisticsUrl = demoReply.text.match(/https?:\/\/\S+\/s\/[A-Za-z0-9_-]{22}/)?.[0];
+  check(!!demoStatisticsUrl && demoReply.text.length < 300, 'short_demo_missing');
+  const demoTable = await fetch(demoStatisticsUrl);
+  check(
+    demoTable.ok && (await demoTable.text()).includes('Charlie'),
+    'complete_demo_table_missing',
+  );
   const historical = await api('/api/v1/trainer/history', 'GET', undefined, trainerCookie);
   check(
     historical.ok && (await historical.json()).sessions.some((s) => s.id === 'smoke-history'),
@@ -759,7 +785,7 @@ SELECT COUNT(*) AS n FROM messages WHERE kind='invite' AND chat_jid=${quote(grou
   );
   check(corrected.ok, 'history_correction_failed');
   const statsAfter = await command(memberJid, '/stats 6 Monate', 'Trainingsstatistik');
-  check(statsAfter.text.includes('Keine zählbaren'), 'statistics_correction_ignored');
+  check(statsAfter.text.includes('Noch keine zählbaren'), 'statistics_correction_ignored');
   const original = (
     await sql(`SELECT response FROM attendance WHERE session_id='smoke-history';`)
   )[0].results[0];
@@ -774,7 +800,13 @@ SELECT COUNT(*) AS n FROM messages WHERE kind='invite' AND chat_jid=${quote(grou
     check(!!url, 'browser_login_missing');
     await writeFile(
       join(folder, 'browser-login.json'),
-      JSON.stringify({ url, origin, stopFile: join(folder, 'browser-stop') }),
+      JSON.stringify({
+        url,
+        origin,
+        statisticsUrl,
+        demoStatisticsUrl,
+        stopFile: join(folder, 'browser-stop'),
+      }),
     );
     progress(`browser acceptance ready: ${join(folder, 'browser-login.json')}`);
     const until = Date.now() + 30 * 60000;

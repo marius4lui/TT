@@ -39,3 +39,7 @@ Unter „Mehr → Vergangene Trainings“ stehen optionale kurze Korrekturen zur
 - Anschließend Typprüfung, Gesamttests, Worker-Build und lokaler Smoke mit Mock-Transport; reale WhatsApp-Zustellung separat bewerten.
 
 Migration vor der neuen Worker-Version anwenden. Bestehende gelöschte Daten bleiben verloren. Die Anzeige ist eine operative Rangliste der heute aktiven Mitglieder und Rollen, kein unveränderliches historisches Turnierergebnis.
+
+## Ergänzung: kompakte Antwort und geteilte Tabelle
+
+Standard sind sechs Monate und höchstens drei Zeilen im Chat. Die vollständige Tabelle ist nur mit einem zufälligen 128-Bit-Link erreichbar, ohne Anmeldung; Weitergabe des Links gibt Zugriff weiter. Nur der Hash wird gespeichert. Live-Links gelten sieben Tage und prüfen weiter Gruppe, Datenschutzfreigabe und Mitgliedschaft der anfragenden Person. Demo-Links prüfen Runde, Version, Ablauf und Trainerrolle. Tabellen werden frisch berechnet, bleiben aus Suchmaschinen und Caches ausgeschlossen und zeigen keine Kennungen oder globalen vollständigen Namen. Gesondert erfasste erste Namensteile aus der jeweiligen Gruppe ersetzen globale Anzeigenamen; ohne geeignete Angabe erscheint „Mitglied“. Migration 0011 ergänzt die Link- und Gruppennamentabellen. Export, Löschweitergabe und tägliche Linkbereinigung sind enthalten.

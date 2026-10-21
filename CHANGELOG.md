@@ -4,6 +4,9 @@
 
 ### Neu
 
+- Kompakte Top 3 (standardmäßig sechs Monate) und kurze, sieben Tage gültige Links zur vollständigen Tabelle mit Zeitraumwahl. Demo-Links enden mit der Übungsrunde.
+- Ranglisten verwenden nur erste Namensteile aus der jeweiligen Gruppe; unbekannte Angaben erscheinen als „Mitglied“.
+
 - WhatsApp-Statistiken und Analysen für rollierend einen, sechs oder zwölf Monate: Ranglisten nach Zusagen mit optionalen Trainerkorrekturen, ohne aktuelle Trainer und mit Hinweis auf unvollständige Historie.
 - Rückmeldungen und Trainerkorrekturen bleiben 400 Tage nach Trainingsende verfügbar; persönliche Datenexporte enthalten Korrekturen. Bereits gelöschte Daten werden nicht wiederhergestellt.
 

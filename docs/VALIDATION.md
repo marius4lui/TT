@@ -3,7 +3,7 @@
 Datum: 21. Oktober 2026. Diese Nachweise betreffen die lokale Open-Source-Vorbereitung sowie Versand nach Webänderungen, kontextabhängige Antworten, Übungsgruppen und den Login-Ablauf. Die separate Live-Prüfung steht unten.
 
 - Typprüfung und Worker-Dry-Run erfolgreich.
-- 844 Vitest-Tests in 26 Dateien erfolgreich, einschließlich Versand nach Webänderung ohne weiteren Webhook, Absage, fällig gewordener Einladung, Pausen, abgelehnter Änderungen und unklarem Provider-Ausgang.
+- 858 Vitest-Tests in 31 Dateien erfolgreich, einschließlich Versand nach Webänderung ohne weiteren Webhook, Absage, fällig gewordener Einladung, Pausen, abgelehnter Änderungen und unklarem Provider-Ausgang.
 - Zusätzliche Regressionen: Kurzantworten mit/ohne Kontext, deutsche Unicode-Zeichen, bestehende Sitzungen bei abgelaufenen Links, explizite Neuanmeldung, Bearbeitung der Login-Nachricht, isolierte Übungsdaten, unklare Gruppenanlage, Rollenentzug und atomare Rückmeldung mit Versandauftrag.
 - Neun Operator-Tests erfolgreich: Konfigurationsauswahl, Origin-Validierung, Transportfehler und Demo-Journal.
 - Formatprüfung und Prüfung lokaler Markdown-Verweise erfolgreich.
@@ -48,3 +48,7 @@ Der vollständige lokale Smoke mit Worker/D1/Evolution-Mock prüft zusätzlich d
 Chromium mit lokalem Worker: historische Termine öffnen, Korrektur setzen und zurückstellen, gespeicherten Zustand nach Neuladen prüfen; Desktop sowie 390/320 Pixel breite Ansichten ohne horizontalen Überlauf.
 
 Quellstand `f48afdc` wurde nach Datenbanksicherung mit Migration `0010_statistics.sql` als Worker-Version `2e531412-127d-4a94-8519-5abb12d48fe3` ausgerollt. Cloudflare bestätigt die Migration. Live-Prüfung im Chromium-Browser: Health `ok`, Login und Trainerbereich erreichbar, ausgeliefertes JavaScript stimmt mit dem geprüften Stand überein. Der [CI-Lauf](https://github.com/marius4lui/TT/actions/runs/39600348988) war zum Zeitpunkt der Live-Prüfung noch aktiv. Echte Gruppen wurden bei dieser Abnahme nicht angeschrieben.
+
+## Nachtrag: kurze Ranglisten und private Tabellenlinks
+
+Lokaler Gesamtablauf mit Worker, D1 und Evolution-Mock erfolgreich: kurze echte und Demo-Antwort, Tabellenlink ohne Anmeldung, vollständige Tabelle, nur Gruppennamensteile und unabhängige Trainerkorrekturen. Chromium prüft beide Tabellen, Zeitraumwechsel, unbekannte Links und Desktop sowie 390/320 Pixel ohne horizontalen Überlauf. Neue Regressionen prüfen Hashspeicherung, Linkablauf, entzogene Mitgliedschaft, deaktivierte Gruppe, Kontolöschung, Demo-Neustart, Namen aus Gruppen statt Privatnachrichten, Export und Bereinigung. Evolution-Produktion wurde für diese Tests nicht verwendet oder umkonfiguriert.

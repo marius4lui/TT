@@ -350,10 +350,10 @@ it('answers statistics in practice with isolated live counts and explicitly fict
       .all<{ text: string }>()
   ).results;
   expect(jobs).toHaveLength(1);
-  expect(jobs[0].text).toContain('Zusagen: 1');
-  expect(jobs[0].text).toContain('verspätet zugesagt: 1');
-  expect(jobs[0].text).toContain('erfundene Beispielpersonen');
-  for (const period of ['1 Monat', '6 Monate', '12 Monate']) expect(jobs[0].text).toContain(period);
+  expect(jobs[0].text).toContain('Fiktive Beispielwerte');
+  expect(jobs[0].text).toContain('6 Monate');
+  expect(jobs[0].text).toContain('/s/');
+  expect(jobs[0].text.length).toBeLessThan(300);
   expect(await db.prepare('SELECT state FROM practice_attendance').first('state')).toBe(before);
   expect(await db.prepare('SELECT COUNT(*) n FROM training_sessions').first('n')).toBe(0);
   expect(await db.prepare('SELECT COUNT(*) n FROM attendance').first('n')).toBe(0);
@@ -371,16 +371,16 @@ it('supports period aliases and reflects reversals without manufacturing histori
   const text = await db
     .prepare("SELECT text FROM outbox_jobs WHERE dedupe_key LIKE '%:six'")
     .first<string>('text');
-  expect(text).toContain('Absagen: 1');
-  expect(text).toContain('*Demo · 6 Monate*');
-  expect(text).not.toContain('*Demo · 12 Monate*');
+  expect(text).toContain('Fiktive Beispielwerte');
+  expect(text).toContain('6 Monate*');
+  expect(text).not.toContain('12 Monate');
   await incoming('Kann doch');
   await incoming('Analysen', { id: 'analysis' });
   expect(
     await db
       .prepare("SELECT text FROM outbox_jobs WHERE dedupe_key LIKE '%:analysis'")
       .first('text'),
-  ).toContain('Zusagen: 1');
+  ).toContain('Fiktive Beispielwerte');
 });
 it('does not deliver a queued demo ranking after the round has ended', async () => {
   await start();

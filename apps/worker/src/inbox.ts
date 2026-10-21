@@ -173,6 +173,7 @@ export async function cleanup(db: D1Database, now: number): Promise<void> {
   if ((await setting(db, 'cleanup_date')) === today) return;
   const day = 86400000;
   await db.batch([
+    db.prepare('DELETE FROM statistics_links WHERE expires_at<=?').bind(now),
     db.prepare('DELETE FROM conversations WHERE expires_at<?').bind(now),
     db.prepare('DELETE FROM auth_challenges WHERE expires_at<?').bind(now),
     db.prepare('DELETE FROM auth_magic_links WHERE expires_at<?').bind(now),
